@@ -196,8 +196,8 @@ class Bridgebot(commands.Bot):
         """
         Probe each candidate asset URL with each extension and return the
         first reachable URL. A single asset URL string is treated as one
-        candidate. Falls back to the last candidate with the first extension
-        when nothing responds (for emotes that is the raw, non-prefixed one).
+        candidate. Returns None when nothing responds so callers can fall
+        back to a message without the asset instead of failing.
         """
         if asset is None or not extensions:
             return asset
@@ -221,9 +221,9 @@ class Bridgebot(commands.Bot):
                             if resp.status == 200:
                                 self._asset_url_cache[key] = url
                                 return url
-                    except aiohttp.ClientError:
+                    except (aiohttp.ClientError, asyncio.TimeoutError):
                         continue
-        return asset[-1] + extensions[0]
+        return None
 
     async def on_ready(self):
         print("Discord Bridge Successfully logged in.")
@@ -260,10 +260,11 @@ class Bridgebot(commands.Bot):
             avatar = await self._resolve_url(avatar, charicon_exts)
             if image is not None:
                 image = await self._resolve_url(image, emote_exts)
+            if image is not None:
                 embed = discord.Embed()
                 embed.set_image(url=image)
                 embed.description = message
-                embed.set_author(name=name, icon_url=avatar) 
+                embed.set_author(name=name, icon_url=avatar)
                 message = ''
             await webhook.send(message, username=name, avatar_url=avatar, embed=embed)
             print(
