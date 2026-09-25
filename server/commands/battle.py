@@ -1,5 +1,7 @@
 import random
+from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 
@@ -14,12 +16,18 @@ __all__ = [
     "ooc_cmd_info_fighter",
     "ooc_cmd_create_fighter",
     "ooc_cmd_create_move",
+    "ooc_cmd_create_item",
+    "ooc_cmd_give_item",
+    "ooc_cmd_remove_item",
+    "ooc_cmd_empty_bag",
+    "ooc_cmd_bag",
     "ooc_cmd_modify_stat",
     "ooc_cmd_delete_fighter",
     "ooc_cmd_delete_move",
     "ooc_cmd_battle_config",
     "ooc_cmd_fight",
     "ooc_cmd_use_move",
+    "ooc_cmd_use_item",
     "ooc_cmd_battle_info",
     "ooc_cmd_refresh_battle",
     "ooc_cmd_remove_fighter",
@@ -40,6 +48,62 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 FIGHTER_STORAGE = Path("storage/battlesystem")
+ITEM_STORAGE = FIGHTER_STORAGE / "items"
+
+# Effects accepted by /create_item.  Items intentionally use their own list so
+# adding ``manarestore`` does not implicitly add it to /create_move.
+ITEM_EFFECTS = (
+    "atkraise",
+    "sparaise",
+    "defraise",
+    "spdraise",
+    "speraise",
+    "atkdown",
+    "defdown",
+    "spadown",
+    "spddown",
+    "spedown",
+    "heal",
+    "poison",
+    "paralysis",
+    "atkall",
+    "atkraiseally",
+    "defraiseally",
+    "sparaiseally",
+    "spdraiseally",
+    "speraiseally",
+    "stealatk",
+    "burn",
+    "freeze",
+    "stunned",
+    "confused",
+    "enraged",
+    "sleep",
+    "healstatus",
+    "manarestore",
+)
+
+ITEM_VALUE_EFFECTS = {
+    "atkraise",
+    "sparaise",
+    "defraise",
+    "spdraise",
+    "speraise",
+    "atkdown",
+    "defdown",
+    "spadown",
+    "spddown",
+    "spedown",
+    "heal",
+    "manarestore",
+    "atkraiseally",
+    "defraiseally",
+    "sparaiseally",
+    "spdraiseally",
+    "speraiseally",
+}
+
+ITEM_ACTION = -3
 
 # Keep this as a tuple so the order shown by /battle_effects stays stable.
 BATTLE_EFFECTS = (
@@ -87,6 +151,7 @@ ALLY_EFFECTS = {
     "sparaiseally",
     "spdraiseally",
     "speraiseally",
+    "manarestore",
 }
 
 # Effect name -> (fighter attribute, human-readable label)
@@ -220,6 +285,89 @@ def _save_fighter(name, fighter):
         )
 
 
+def _item_storage_path(name):
+    """Return the sanitized path used for an item YAML file."""
+    normalized_name = derelative(name.strip().lower())
+    return ITEM_STORAGE / f"{normalized_name}.yaml"
+
+
+def _item_exists(name):
+    """Return True when an item YAML file exists."""
+    return _item_storage_path(name).is_file()
+
+
+def _load_item(name):
+    """Load an item definition from YAML."""
+    path = _item_storage_path(name)
+
+    with path.open("r", encoding="utf-8") as stream:
+        return yaml.safe_load(stream) or {}
+
+
+def _save_item(name, item):
+    """Persist an item definition to YAML using a deterministic format."""
+    ITEM_STORAGE.mkdir(parents=True, exist_ok=True)
+    path = _item_storage_path(name)
+
+    with path.open("w", encoding="utf-8") as stream:
+        yaml.safe_dump(
+            item,
+            stream,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+
+
+def _get_area_client_ids(area):
+    """Build a client-id -> client lookup for every client in the area."""
+    return {member.id: member for member in area.clients}
+
+
+def _ensure_bag(client):
+    """Return the player's item bag, creating it when necessary."""
+    if client.battle is None:
+        return None
+
+    bag = getattr(client.battle, "bag", None)
+    if not isinstance(bag, list):
+        bag = []
+        client.battle.bag = bag
+    return bag
+
+
+def _item_action(item):
+    """Convert a YAML item definition to the action shape used by battle helpers."""
+    return SimpleNamespace(
+        name=item.get("Name", ""),
+        effect=[item.get("Effect", "")],
+        value=item.get("Value"),
+        type=None,
+        power=0,
+        accuracy=100,
+        cost=0,
+    )
+
+
+def _item_stat_multiplier(action, area):
+    """Return an item's explicit stat multiplier or the normal move multiplier."""
+    value = getattr(action, "value", None)
+    if value is not None:
+        return value
+    return area.battle_bonus_malus
+
+
+def _consume_item(client, item_name):
+    """Consume exactly one copy of an item from the player's bag."""
+    bag = _ensure_bag(client)
+    normalized_name = derelative(item_name.strip().lower())
+
+    if bag is None or normalized_name not in bag:
+        return False
+
+    bag.remove(normalized_name)
+    return True
+
+
 def _battle_fighter_exists(client):
     """Return True when the client currently has a selected fighter."""
     return client.battle is not None
@@ -249,6 +397,34 @@ def _finish_turn_if_ready(area):
     # A finished battle leaves the fighter list empty.
     if not area.fighters:
         area.battle_started = False
+
+
+def _format_bag_lines(client, title="🎒 Items 🎒"):
+    """Return formatted item-bag lines for a client."""
+    bag = getattr(client.battle, "bag", []) if client.battle is not None else []
+    counts = Counter(bag)
+
+    lines = [title]
+    if not counts:
+        lines.append("- Empty")
+        return lines
+
+    for item_name in sorted(counts):
+        lines.append(f"- {item_name} x{counts[item_name]}")
+    return lines
+
+
+def _send_bag_message(viewer, target):
+    """Send the target player's bag to the viewer."""
+    if target.battle is None:
+        viewer.send_ooc("Target has to choose a fighter first!")
+        return
+
+    lines = [
+        f"\n🎒 [{target.id}]{target.showname}'s Battle Bag 🎒:",
+        *(_format_bag_lines(target, title="Items:")),
+    ]
+    viewer.send_ooc("\n".join(lines))
 
 
 def _send_fighter_message(client, include_moves=False):
@@ -293,6 +469,10 @@ def _send_fighter_message(client, include_moves=False):
                 lines.extend(f"- {effect}" for effect in move.effect)
 
             lines.append("")
+
+    if include_moves:
+        lines.extend(_format_bag_lines(client))
+        lines.append("")
 
     client.send_ooc("\n".join(lines))
 
@@ -355,13 +535,18 @@ def reload_fighter(client, char=None):
 
     When ``char`` is supplied, it is used directly so a command can reload
     the battle object without reading the file a second time after saving.
+    The item bag belongs to the player, so it is preserved across reloads.
     """
+    previous_bag = list(getattr(client.battle, "bag", [])) if client.battle else []
+
     if char is None:
         char = _load_fighter(client.battle.fighter)
 
     fighter_name = client.battle.fighter
     client.battle = ClientManager.BattleChar(client, fighter_name, char)
     client.battle.guild = find_guild(client)
+    client.battle.bag = previous_bag
+    client.battle.selected_item = None
 
 
 # ---------------------------------------------------------------------------
@@ -373,7 +558,7 @@ def ooc_cmd_choose_fighter(client, arg):
     """
     Choose a fighter from the server list.
 
-    Usage: /choose_fighter <NameFighter>
+    Usage: /choose_fighter NameFighter
     """
     fighter_name = derelative(arg.strip().lower())
 
@@ -381,9 +566,13 @@ def ooc_cmd_choose_fighter(client, arg):
         client.send_ooc("No fighter has this name!")
         return
 
+    previous_bag = list(getattr(client.battle, "bag", [])) if client.battle else []
+
     char = _load_fighter(fighter_name)
     client.battle = ClientManager.BattleChar(client, fighter_name, char)
     client.battle.guild = find_guild(client)
+    client.battle.bag = previous_bag
+    client.battle.selected_item = None
     send_info_fighter(client)
 
 
@@ -391,7 +580,7 @@ def ooc_cmd_choose_fighter(client, arg):
 def ooc_cmd_info_fighter(client):
     """
     Send information about the currently selected fighter.
-    
+
     Usage: /info_fighter
     """
     if _battle_fighter_exists(client):
@@ -551,14 +740,295 @@ def ooc_cmd_create_move(client, name, cost, type, power, accuracy, effects):
 
 @mod_only(hub_owners=True)
 @command(
-    Arg("name", help="fighter name"),
+    Arg("name", help="item name"),
+    Arg("effect", choices=ITEM_EFFECTS, help="item effect"),
+    Arg("value", float, default=None, help="heal/mana amount or stat multiplier"),
+    Arg(
+        "evidence_name",
+        rest=True,
+        default="",
+        help="evidence shown in the IC message when the item is used",
+    ),
+)
+def ooc_cmd_create_item(client, name, effect, value, evidence_name):
+    """
+    Create an item YAML definition.
+
+    Value is required for heals, mana restoration and stat changes.  It is
+    ignored for all other effects.  evidence_name is optional; when set, it
+    is attached as the evidence shown on the IC message sent when the item
+    is used.
+
+    Usage: /create_item ItemName Effect [Value] [EvidenceName]
+    """
+    item_name = derelative(name.strip().lower())
+    normalized_effect = effect.strip().lower()
+    evidence_name = evidence_name.strip()
+
+    if not item_name:
+        client.send_ooc("Item name cannot be empty.")
+        return
+
+    if normalized_effect not in ITEM_EFFECTS:
+        client.send_ooc(f"Unknown item effect: {effect}")
+        return
+
+    if _item_exists(item_name):
+        client.send_ooc("This item has already been created.")
+        return
+
+    if normalized_effect in ITEM_VALUE_EFFECTS:
+        if value is None:
+            client.send_ooc(
+                "Value is required for this effect.\n"
+                "Usage: /create_item ItemName Effect Value"
+            )
+            return
+        if value <= 0:
+            client.send_ooc("Value has to be greater than zero.")
+            return
+
+    item = {
+        "Name": item_name,
+        "Effect": normalized_effect,
+    }
+
+    if normalized_effect in ITEM_VALUE_EFFECTS:
+        item["Value"] = value
+
+    if evidence_name:
+        item["EvidenceName"] = evidence_name
+
+    _save_item(item_name, item)
+    client.send_ooc(f"{item_name} has been created!")
+
+
+@mod_only(hub_owners=True)
+@command(
+    Arg("target_id", int, help="target client ID"),
+    Arg("name_item", help="item name"),
+    Arg("quantity", int, help="quantity"),
+)
+def ooc_cmd_give_item(client, target_id, name_item, quantity):
+    """
+    Give items to another player's battle bag.
+
+    Usage: /give_item <Target_ID> <ItemName> <Quantity>
+    """
+    if quantity <= 0:
+        client.send_ooc("Quantity has to be greater than zero.")
+        return
+
+    normalized_name = derelative(name_item.strip().lower())
+    if not _item_exists(normalized_name):
+        client.send_ooc("No item has this name!")
+        return
+
+    target = _get_area_client_ids(client.area).get(target_id)
+    if target is None:
+        client.send_ooc("Target not found!")
+        return
+
+    if target.battle is None:
+        client.send_ooc("Target has to choose a fighter first!")
+        return
+
+    bag = _ensure_bag(target)
+    bag.extend([normalized_name] * quantity)
+    client.send_ooc(
+        f"Gave {quantity}x {normalized_name} to [{target.id}]{target.showname}."
+    )
+    target.send_ooc(f"You received {quantity}x {normalized_name}.")
+
+
+@mod_only(hub_owners=True)
+@command(
+    Arg("target_id", int, help="target client ID"),
+    Arg("name_item", help="item name"),
+    Arg("quantity", int, help="quantity"),
+)
+def ooc_cmd_remove_item(client, target_id, name_item, quantity):
+    """
+    Remove items from another player's battle bag.
+
+    Usage: /remove_item <Target_ID> <ItemName> <Quantity>
+    """
+    if quantity <= 0:
+        client.send_ooc("Quantity has to be greater than zero.")
+        return
+
+    normalized_name = derelative(name_item.strip().lower())
+    target = _get_area_client_ids(client.area).get(target_id)
+    if target is None:
+        client.send_ooc("Target not found!")
+        return
+
+    if target.battle is None:
+        client.send_ooc("Target has to choose a fighter first!")
+        return
+
+    bag = _ensure_bag(target)
+    available = bag.count(normalized_name)
+    if available < quantity:
+        client.send_ooc(
+            f"Target does not have enough {normalized_name} (has {available})."
+        )
+        return
+
+    for _ in range(quantity):
+        bag.remove(normalized_name)
+
+    client.send_ooc(
+        f"Removed {quantity}x {normalized_name} from [{target.id}]{target.showname}."
+    )
+    target.send_ooc(f"{quantity}x {normalized_name} was removed from your bag.")
+
+
+@mod_only(hub_owners=True)
+@command(Arg("target_id", int, help="target client ID"))
+def ooc_cmd_empty_bag(client, target_id):
+    """
+    Empty another player's item bag.
+
+    Usage: /empty_bag <Target_ID>
+    """
+    target = _get_area_client_ids(client.area).get(target_id)
+    if target is None:
+        client.send_ooc("Target not found!")
+        return
+
+    if target.battle is None:
+        client.send_ooc("Target has to choose a fighter first!")
+        return
+
+    bag = _ensure_bag(target)
+    removed = len(bag)
+    bag.clear()
+
+    client.send_ooc(f"Emptied [{target.id}]{target.showname}'s bag ({removed} items).")
+    target.send_ooc("Your item bag has been emptied.")
+
+
+@command(Arg("target_id", int, default=None, help="target client ID"))
+def ooc_cmd_bag(client, target_id):
+    """
+    Show the caller's item bag, or another player's bag for a GM.
+
+    Usage: /bag [Target_ID]
+    """
+    area = client.area
+    target = client
+
+    if target_id is not None:
+        # The uploaded battle module exposes area owners as the in-module
+        # authorization check for administrative player inspection.
+        if client not in getattr(area.area_manager, "owners", ()):
+            client.send_ooc("Only a GM can inspect another player's bag.")
+            return
+
+        target = _get_area_client_ids(area).get(target_id)
+        if target is None:
+            client.send_ooc("Target not found!")
+            return
+
+    if target.battle is None:
+        if target is client:
+            client.send_ooc("You have to choose a fighter first!")
+        else:
+            client.send_ooc("Target has to choose a fighter first!")
+        return
+
+    if target is client:
+        lines = ["\n🎒 Your Battle Bag 🎒:", *_format_bag_lines(client, title="Items:")]
+        client.send_ooc("\n".join(lines))
+        return
+
+    _send_bag_message(client, target)
+
+
+@command(
+    Arg("name_item", help="item name"),
+    Arg("target_id", int, default=None, help="target client ID"),
+)
+def ooc_cmd_use_item(client, name_item, target_id):
+    """
+    Select an item as the current battle action.
+
+    Usage: /use_item <ItemName> [Target_ID]
+    """
+    area = client.area
+
+    if client.battle is None:
+        client.send_ooc("You have to choose a fighter first!")
+        return
+
+    if client not in area.fighters:
+        client.send_ooc("You are not ready to fight!")
+        return
+
+    if client.battle.selected_move != -1:
+        client.send_ooc("You already selected a move!")
+        return
+
+    normalized_name = derelative(name_item.strip().lower())
+    bag = _ensure_bag(client)
+
+    if normalized_name not in bag:
+        client.send_ooc("You don't have this item in your bag!")
+        return
+
+    if not _item_exists(normalized_name):
+        client.send_ooc("This item no longer exists in the item storage.")
+        return
+
+    item = _load_item(normalized_name)
+    if not isinstance(item, dict) or not item.get("Name"):
+        client.send_ooc("This item has an invalid YAML definition.")
+        return
+
+    effect = str(item.get("Effect", "")).strip().lower()
+    if effect not in ITEM_EFFECTS:
+        client.send_ooc("This item has an invalid effect definition.")
+        return
+
+    if effect in ITEM_VALUE_EFFECTS and (item.get("Value") is None or item.get("Value") <= 0):
+        client.send_ooc("This item has an invalid Value.")
+        return
+
+    if target_id is not None:
+        fighter_ids = _get_fighter_ids(area)
+        if target_id not in fighter_ids:
+            client.send_ooc("Your target is not in the fighter list")
+            return
+        client.battle.target = fighter_ids[target_id]
+    elif effect == "atkall":
+        client.battle.target = "all"
+    else:
+        client.send_ooc("Not enough argument to use this item")
+        return
+
+    if client.battle.current_client is None:
+        client.battle.current_client = client
+
+    client.battle.selected_move = ITEM_ACTION
+    client.battle.selected_item = normalized_name
+
+    client.send_ooc(f"You have chosen {item.get('Name', normalized_name)}")
+    area.broadcast_ooc(f"{client.battle.fighter} has chosen an item")
+
+    area.num_selected_move += 1
+    _finish_turn_if_ready(area)
+
+
+@mod_only(hub_owners=True)
+@command(Arg("name", help="fighter name"),
     Arg("stat", choices=STAT_NAMES),
     Arg("value", float),
 )
 def ooc_cmd_modify_stat(client, name, stat, value):
     """
     Modify one of a fighter's base stats.
-    
+
     Usage: /modify_stat <FighterName> <hp|mana|atk|defe|spa|spd|spe> <Value>
     """
     fighter_name = derelative(name.strip().lower())
@@ -588,7 +1058,7 @@ def ooc_cmd_modify_stat(client, name, stat, value):
 def ooc_cmd_delete_fighter(client, arg):
     """
     Delete a fighter YAML definition.
-    
+
     Usage: /delete_fighter <FighterName>
     """
     fighter_name = derelative(arg.strip().lower())
@@ -606,7 +1076,7 @@ def ooc_cmd_delete_fighter(client, arg):
 def ooc_cmd_delete_move(client, arg):
     """
     Delete a move from the currently selected fighter.
-    
+
     Usage: /delete_move <MoveName>
     """
     if not _battle_fighter_exists(client):
@@ -877,7 +1347,7 @@ def ooc_cmd_fight(client):
 def ooc_cmd_refresh_battle(client):
     """
     Reset the current battle and return to the lobby.
-    
+
     Usage: /refresh_battle
     """
     area = client.area
@@ -901,7 +1371,7 @@ def ooc_cmd_refresh_battle(client):
 def ooc_cmd_surrender(client):
     """
     Surrender from the current battle.
-    
+
     Usage: /surrender
     """
     area = client.area
@@ -916,6 +1386,7 @@ def ooc_cmd_surrender(client):
         client.battle.hp = 0
         client.battle.selected_move = -1
         client.battle.target = None
+        client.battle.selected_item = None
 
     battle_send_ic(
         client,
@@ -934,7 +1405,7 @@ def ooc_cmd_surrender(client):
 def ooc_cmd_remove_fighter(client, id):
     """
     Force a fighter to leave the battle.
-    
+
     Usage: /remove_fighter <Target_ID>
     """
     area = client.area
@@ -973,7 +1444,7 @@ def ooc_cmd_remove_fighter(client, id):
 def ooc_cmd_force_skip_move(client, id):
     """
     Force a fighter to skip the current turn.
-    
+
     Usage: /force_skip_move <Target_ID>
     """
     area = client.area
@@ -1001,7 +1472,7 @@ def ooc_cmd_force_skip_move(client, id):
 def ooc_cmd_skip_move(client):
     """
     Skip the current turn.
-    
+
     Usage: /skip_move
     """
     area = client.area
@@ -1141,7 +1612,7 @@ def ooc_cmd_leave_guild(client, id):
 def ooc_cmd_join_guild(client, id):
     """
     Invite another fighter to the guild you lead.
-    
+
     Usage: /join_guild <Target_ID>
     """
     area = client.area
@@ -1219,7 +1690,7 @@ def ooc_cmd_create_guild(client, arg):
 def ooc_cmd_info_guild(client):
     """
     Send information about the current guild.
-    
+
     Usage: /info_guild
     """
     if client.battle is None:
@@ -1357,13 +1828,14 @@ def ooc_cmd_use_move(client, move, target):
 # Battle presentation
 # ---------------------------------------------------------------------------
 
-def battle_send_ic(client, msg, effect="", shake=0, offset=0):
+def battle_send_ic(client, msg, effect="", shake=0, offset=0, evidence=""):
     """
     Send a battle event to the current IC scene.
 
     ``effect`` is the visual battle effect name.
     ``shake`` enables a screenshake.
     ``offset`` selects the alive/dead sprite offset.
+    ``evidence`` is the evidence name to show alongside the message (e.g. when using an item).
     """
     offset = 100 if offset else client.offset_pair
 
@@ -1485,6 +1957,8 @@ def _calculate_damage(client, target, move):
 
 
 def _apply_target_stat_downs(client, target, move, area):
+    stat_multiplier = _item_stat_multiplier(move, area)
+
     for effect_name, (stat, label) in TARGET_LOWER_EFFECTS.items():
         if effect_name not in move.effect:
             continue
@@ -1492,7 +1966,7 @@ def _apply_target_stat_downs(client, target, move, area):
         setattr(
             target.battle,
             stat,
-            getattr(target.battle, stat) / area.battle_bonus_malus,
+            getattr(target.battle, stat) / stat_multiplier,
         )
         battle_send_ic(
             target,
@@ -1618,7 +2092,8 @@ def _apply_status_effects(client, target, move, area):
 
 
 def _apply_ally_move(client, target, move, area, *, single_target):
-    """Apply healing and ally buffs to one target."""
+    """Apply healing, mana restoration and ally buffs to one target."""
+    stat_multiplier = _item_stat_multiplier(move, area)
     if target.battle.hp <= 0:
         if single_target:
             battle_send_ic(
@@ -1628,7 +2103,10 @@ def _apply_ally_move(client, target, move, area, *, single_target):
         return
 
     if "heal" in move.effect:
-        if move.type == "atk":
+        move_value = getattr(move, "value", None)
+        if move_value is not None:
+            heal = move_value
+        elif move.type == "atk":
             heal = (move.power + client.battle.atk) * 0.25
         else:
             heal = (move.power + client.battle.spa) * 0.25
@@ -1645,6 +2123,24 @@ def _apply_ally_move(client, target, move, area, *, single_target):
             battle_send_ic(
                 target,
                 msg=f"and heals ~{target.battle.fighter}~ of ~{heal}~ hp",
+                effect="lifeup",
+            )
+
+    if "manarestore" in move.effect:
+        restore = getattr(move, "value", None)
+        if restore is None:
+            return
+        target.battle.mana += restore
+        if target == client:
+            battle_send_ic(
+                client,
+                msg=f"and restores ~{restore}~ mana to itself",
+                effect="lifeup",
+            )
+        else:
+            battle_send_ic(
+                target,
+                msg=f"and restores ~{restore}~ mana to ~{target.battle.fighter}~",
                 effect="lifeup",
             )
 
@@ -1681,7 +2177,7 @@ def _apply_ally_move(client, target, move, area, *, single_target):
         setattr(
             target.battle,
             stat,
-            getattr(target.battle, stat) * area.battle_bonus_malus,
+            getattr(target.battle, stat) * stat_multiplier,
         )
         battle_send_ic(
             target,
@@ -1692,6 +2188,7 @@ def _apply_ally_move(client, target, move, area, *, single_target):
 
 def _apply_self_buffs(client, move, area):
     """Apply self-targeted stat increases and the enraged status."""
+    stat_multiplier = _item_stat_multiplier(move, area)
     for effect_name, (stat, label) in SELF_RAISE_EFFECTS.items():
         if effect_name not in move.effect:
             continue
@@ -1699,7 +2196,7 @@ def _apply_self_buffs(client, move, area):
         setattr(
             client.battle,
             stat,
-            getattr(client.battle, stat) * area.battle_bonus_malus,
+            getattr(client.battle, stat) * stat_multiplier,
         )
         battle_send_ic(
             client,
@@ -1713,6 +2210,113 @@ def _apply_self_buffs(client, move, area):
             client,
             msg=f"~{client.battle.fighter}~ is preparing for the next attack",
             effect="enraged",
+        )
+
+
+def _process_item_action(client, area):
+    """Resolve the item selected for the current turn."""
+    item_name = getattr(client.battle, "selected_item", None)
+    if item_name is None:
+        return
+
+    item = _load_item(item_name)
+    if not isinstance(item, dict) or not item.get("Name"):
+        battle_send_ic(
+            client,
+            msg=f"~{client.battle.fighter}~ cannot use the selected item because its YAML definition is invalid",
+        )
+        return
+
+    effect = str(item.get("Effect", "")).strip().lower()
+    if effect not in ITEM_EFFECTS:
+        battle_send_ic(
+            client,
+            msg=f"~{client.battle.fighter}~ cannot use ~{item.get('Name', item_name)}~ because its effect is invalid",
+        )
+        return
+
+    if effect in ITEM_VALUE_EFFECTS and (item.get("Value") is None or item.get("Value") <= 0):
+        battle_send_ic(
+            client,
+            msg=f"~{client.battle.fighter}~ cannot use ~{item.get('Name', item_name)}~ because its Value is invalid",
+        )
+        return
+
+    action = _item_action(item)
+    evidence_name = str(item.get("EvidenceName", "")).strip()
+
+    # The item was selected before the turn resolved.  Consume it only now,
+    # after stun/confusion/sleep/paralysis checks have passed.
+    if not _consume_item(client, item_name):
+        battle_send_ic(
+            client,
+            msg=f"~{client.battle.fighter}~ tries to use ~{item.get('Name', item_name)}~ but has none left",
+        )
+        return
+
+    is_ally_action = _is_ally_move(client, action)
+    targets = _get_move_targets(client, action, is_ally_action)
+
+    if effect != "atkall":
+        battle_send_ic(
+            client,
+            msg=f"~{client.battle.fighter}~ uses ~{item.get('Name', item_name)}~",
+            evidence=evidence_name,
+        )
+
+    if is_ally_action:
+        single_target = len(targets) == 1
+        for target in targets:
+            _apply_ally_move(
+                client,
+                target,
+                action,
+                area,
+                single_target=single_target,
+            )
+        return
+
+    if effect in SELF_RAISE_EFFECTS or effect == "enraged":
+        _apply_self_buffs(client, action, area)
+        return
+
+    if effect in TARGET_LOWER_EFFECTS:
+        for target in targets:
+            if target is None or target.battle.hp <= 0:
+                if target is not None and len(targets) == 1:
+                    battle_send_ic(client, msg="but the target is already down")
+                continue
+            _apply_target_stat_downs(client, target, action, area)
+        return
+
+    if effect in STEAL_EFFECTS or effect in {
+        "poison",
+        "paralysis",
+        "burn",
+        "freeze",
+        "stunned",
+        "confused",
+        "sleep",
+    }:
+        for target in targets:
+            if target is None or target.battle.hp <= 0:
+                if target is not None and len(targets) == 1:
+                    battle_send_ic(client, msg="but the target is already down")
+                continue
+
+            if effect in STEAL_EFFECTS:
+                _apply_steal_effects(client, target, action, area)
+            else:
+                _apply_status_effects(client, target, action, area)
+        return
+
+    # ``atkall`` is a targeting effect in the move engine.  Items do not have
+    # power/type inputs, so a standalone atkall item has no damage to resolve.
+    if effect == "atkall":
+        battle_send_ic(
+            client,
+            msg=f"~{client.battle.fighter}~ uses ~{item.get('Name', item_name)}~ but it has no direct effect",
+            evidence=evidence_name,
         )
 
 
@@ -1780,6 +2384,10 @@ def _process_fighter_action(client, area):
 
         client.battle.status = None
         battle_send_ic(client, msg=f"~{client.battle.fighter}~ wakes up")
+
+    if client.battle.selected_move == ITEM_ACTION:
+        _process_item_action(client, area)
+        return
 
     move = client.battle.moves[client.battle.selected_move]
 
@@ -1949,6 +2557,7 @@ def _cleanup_dead_fighters(area):
         last_processed = client
         client.battle.selected_move = -1
         client.battle.target = None
+        client.battle.selected_item = None
 
         if client.battle.hp <= 0:
             area.fighters.remove(client)
