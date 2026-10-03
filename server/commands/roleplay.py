@@ -40,6 +40,8 @@ __all__ = [
     "ooc_cmd_timer_interval",
     "ooc_cmd_ooc_actions",
     "ooc_cmd_sfx",
+    "ooc_cmd_get_variable",
+    "ooc_cmd_set_variable",
 ]
 
 
@@ -153,7 +155,7 @@ def ooc_cmd_roll(client, arg):
     Usage: /rollp [value/XdY] ["+5"/"-5"/"*5"/"/5"]
     """
     roll, num_dice, chosen_max, _modifiers, Sum = rtd(arg)
-
+    client.area.variables["roll_sum"] = Sum
     client.area.broadcast_ooc(
         f"[👉🎲] [{client.id}] {client.showname} rolled:\n {roll} out of {chosen_max}."
         + (f"\nThe total sum is {Sum}." if num_dice > 1 else "")
@@ -171,7 +173,7 @@ def ooc_cmd_rollp(client, arg):
     Usage: /rollp [value/XdY] ["+5"/"-5"/"*5"/"/5"]
     """
     roll, num_dice, chosen_max, _modifiers, Sum = rtd(arg)
-
+    client.area.variables["hidden_roll_sum"] = Sum
     client.send_ooc(
         f"[Hidden] You rolled {roll} out of {chosen_max}." + (f"\nThe total sum is {Sum}." if num_dice > 1 else "")
     )
@@ -1069,3 +1071,35 @@ def ooc_cmd_sfx(client, arg):
             a.broadcast_ooc(f"[{client.id}] {client.showname} has played sfx '{arg}'.")
     client.set_sfx_delay()
     database.log_area("sfx", client, client.area, message=f"has played sfx {arg}")
+
+
+@command(Arg("var", rest=True, default="", help="variable currently stored in the area."))
+def ooc_cmd_get_variable(client, var):
+    """
+    Get the value of the variable by name in the current area.
+    If <var> is blank you'll be shown all variables that are set in current area.
+    Usage: /get_variable <var>
+    """
+    if var == "":
+        text = "Current variables in area:\n"
+        for key, value in variables.items():
+            text += f"\nVariable: {key}, Value: {value}"
+        client.send_ooc(text)
+        return
+    if var in variables:
+        client.send_ooc(f"Variable {var} is set to {client.area.variables[var]}.")
+    else:
+        raise ClientError(f"Variable {var} is not set!")
+
+
+@command(
+    Arg("var", default="", help="variable name"),
+    Arg("value", rest=True, default="", help="value(s) to set it to.")
+)
+def ooc_cmd_set_variable(client, var, value):
+    """
+    Set the current area's <var> to <value>.
+    Usage: /set_variable <var> <value>
+    """
+    client.area.variables[var] = value
+    client.send_ooc(f"Setting {var} to {value}...")
