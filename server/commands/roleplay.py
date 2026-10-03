@@ -10,7 +10,7 @@ from server import database
 from server.constants import TargetType
 from server.exceptions import ClientError, ServerError, ArgumentError
 from server.remote_client import RemoteClient
-from server.scripting import evaluate_expression, ScriptingError, DivisionByZeroError
+from server.scripting import evaluate_expression, resolve_value, ScriptingError, DivisionByZeroError
 
 from . import mod_only, command, Arg
 
@@ -42,6 +42,7 @@ __all__ = [
     "ooc_cmd_sfx",
     "ooc_cmd_get_variable",
     "ooc_cmd_set_variable",
+    "ooc_cmd_evaluate_variable",
 ]
 
 
@@ -1094,12 +1095,29 @@ def ooc_cmd_get_variable(client, var):
 
 @command(
     Arg("var", default="", help="variable name"),
-    Arg("value", rest=True, default="", help="value(s) to set it to.")
+    Arg("var", rest=True, default="", help="value to set it to")
 )
 def ooc_cmd_set_variable(client, var, value):
     """
-    Set the current area's <var> to <value>.
+    Set the current area's variable <var> to value <value>.
+    <expr> can either be a value, like 10, or an expression, like 10+10, x+5, etc.
     Usage: /set_variable <var> <value>
     """
     client.area.variables[var] = value
-    client.send_ooc(f"Setting {var} to {value}...")
+    client.send_ooc(f"Successfully set Variable: {var} to Value: {value}")
+
+
+@command(
+    Arg("var", default="", help="variable name"),
+    Arg("expr", rest=True, default="", help="value to set it to, or an expression (10+10, x+5, etc.)")
+)
+def ooc_cmd_evaluate_variable(client, var, expr):
+    """
+    Evaluate the current area's variable <var> using the <expr> expression.
+    <expr> can either be a value, like 10, or an expression, like 10+10, x+5, etc.
+    Usage: /evaluate_variable <var> <expr>
+    """
+    variables = getattr(self.area, "variables", {})
+    value = resolve_value(expr, variables)
+    client.area.variables[var] = value
+    client.send_ooc(f"Successfully set Variable: {var} to Value: {value}")
