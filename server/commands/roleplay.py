@@ -1083,11 +1083,11 @@ def ooc_cmd_get_variable(client, var):
     """
     if var == "":
         text = "Current variables in area:\n"
-        for key, value in variables.items():
+        for key, value in client.area.variables.items():
             text += f"\nVariable: {key}, Value: {value}"
         client.send_ooc(text)
         return
-    if var in variables:
+    if var in client.area.variables:
         client.send_ooc(f"Variable {var} is set to {client.area.variables[var]}.")
     else:
         raise ClientError(f"Variable {var} is not set!")
@@ -1095,7 +1095,7 @@ def ooc_cmd_get_variable(client, var):
 
 @command(
     Arg("var", default="", help="variable name"),
-    Arg("var", rest=True, default="", help="value to set it to")
+    Arg("value", rest=True, default="", help="value to set it to")
 )
 def ooc_cmd_set_variable(client, var, value):
     """
@@ -1103,6 +1103,8 @@ def ooc_cmd_set_variable(client, var, value):
     <expr> can either be a value, like 10, or an expression, like 10+10, x+5, etc.
     Usage: /set_variable <var> <value>
     """
+    if var == "":
+        raise ClientError("Variable can't be empty!")
     client.area.variables[var] = value
     client.send_ooc(f"Successfully set Variable: {var} to Value: {value}")
 
@@ -1117,7 +1119,7 @@ def ooc_cmd_evaluate_variable(client, var, expr):
     <expr> can either be a value, like 10, or an expression, like 10+10, x+5, etc.
     Usage: /evaluate_variable <var> <expr>
     """
-    variables = getattr(self.area, "variables", {})
+    variables = getattr(client.area, "variables", {})
     value = resolve_value(expr, variables)
     client.area.variables[var] = value
     client.send_ooc(f"Successfully set Variable: {var} to Value: {value}")

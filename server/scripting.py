@@ -23,6 +23,8 @@ registry, and every field is read through an explicit whitelist -- never raw
 """
 
 import re
+import ast
+import math
 
 from server.constants import _SYSTEM_IPID
 from server.exceptions import ArgumentError
@@ -63,6 +65,91 @@ class DivisionByZeroError(ScriptingError):
     """Raised when an expression divides by zero (so callers can retry)."""
 
 
+def _check_number(value):
+    if type(value) is bool or not isinstance(value, (int, float)):
+        raise ScriptingError("Expected a number in expression.")
+
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ScriptingError("Expression produced a non-finite number.")
+        if abs(round(value)) > MAX_TERM:
+            raise ScriptingError(
+                "Expression takes numbers past the server's computation limit"
+            )
+    else:
+        if abs(value) > MAX_TERM:
+            raise ScriptingError(
+                "Expression takes numbers past the server's computation limit"
+            )
+
+    return value
+
+
+def _coerce(value, name):
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        try:
+            f = float(value)
+        except ValueError:
+            raise ScriptingError(f"Variable '{name}' is not a number.")
+        return int(f) if f.is_integer() else f
+    raise ScriptingError(f"Variable '{name}' is not a number.")
+
+
+def _eval_ast(node, variables, sources):
+    if isinstance(node, ast.Expression):
+        return _eval_ast(node.body, variables, sources)
+
+    if isinstance(node, ast.Constant):
+        return _check_number(node.value)
+
+    if isinstance(node, ast.Name):
+        name = node.id
+        if name in variables:
+            return _check_number(_coerce(variables[name], name))
+        if name in sources:
+            return _check_number(_coerce(sources[name], name))
+        raise ScriptingError(f"Unknown variable '{name}' in expression.")
+
+    if isinstance(node, ast.BinOp):
+        left = _eval_ast(node.left, variables, sources)
+        right = _eval_ast(node.right, variables, sources)
+
+        if isinstance(node.op, ast.Add):
+            result = left + right
+        elif isinstance(node.op, ast.Sub):
+            result = left - right
+        elif isinstance(node.op, ast.Mult):
+            result = left * right
+        elif isinstance(node.op, ast.Div):
+            if right == 0:
+                raise DivisionByZeroError("Expression divides by zero.")
+            result = left / right
+        else:
+            raise ScriptingError(
+                "Expected numbers and standard mathematical operations in expression"
+            )
+
+        return _check_number(result)
+
+    if isinstance(node, ast.UnaryOp):
+        value = _eval_ast(node.operand, variables, sources)
+        if isinstance(node.op, ast.UAdd):
+            return _check_number(+value)
+        if isinstance(node.op, ast.USub):
+            return _check_number(-value)
+        raise ScriptingError(
+            "Expected numbers and standard mathematical operations in expression"
+        )
+
+    raise ScriptingError(
+        "Expected numbers and standard mathematical operations in expression"
+    )
+
+
 def evaluate_expression(expr, variables=None, sources=None):
     """
     Evaluate an arithmetic expression with variable substitution.
@@ -75,46 +162,20 @@ def evaluate_expression(expr, variables=None, sources=None):
         variables = {}
     if sources is None:
         sources = {}
+
     expr = expr.strip()
     if not expr:
         raise ScriptingError("Empty expression.")
+
     if "**" in expr:
         raise ScriptingError("Exponentiation is not allowed in expressions.")
 
-    def _substitute(match):
-        name = match.group(0)
-        if name in variables:
-            return str(variables[name])
-        if name in sources:
-            return str(sources[name])
-        raise ScriptingError(f"Unknown variable '{name}' in expression.")
-
-    substituted = _IDENTIFIER.sub(_substitute, expr)
-
-    for ch in substituted:
-        if ch not in ALLOWED_CHARS:
-            raise ScriptingError("Expected numbers and standard mathematical operations in expression")
-
-    # Prevent any term from reaching past MAX_TERM to avoid server lag from
-    # frivolous expressions.
-    terms = substituted
-    for op in "+-*/()":
-        terms = terms.replace(op, "!")
-    for term in terms.split("!"):
-        if term == "":
-            continue
-        try:
-            if abs(round(float(term))) > MAX_TERM:
-                raise ScriptingError("Expression takes numbers past the server's computation limit")
-        except ValueError:
-            raise ScriptingError("Expression has a syntax error and cannot be computed")
-
     try:
-        return eval(substituted, {"__builtins__": {}}, {})
-    except ZeroDivisionError:
-        raise DivisionByZeroError("Expression divides by zero.")
-    except (SyntaxError, TypeError, NameError):
+        tree = ast.parse(expr, mode="eval")
+    except (SyntaxError, ValueError):
         raise ScriptingError("Expression has a syntax error and cannot be computed")
+
+    return _eval_ast(tree, variables, sources)
 
 
 def resolve_value(text, variables=None, sources=None):
