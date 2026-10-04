@@ -578,8 +578,8 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.STR, # 2 # folder
             self.ArgType.STR_OR_EMPTY, # 3 # anim
             self.ArgType.STR_OR_EMPTY, # 4  # text
-            self.ArgType.STR, # 5 # pos
-            self.ArgType.STR, # 6 # sfx
+            self.ArgType.STR_OR_EMPTY, # 5 # pos
+            self.ArgType.STR_OR_EMPTY, # 6 # sfx
             self.ArgType.INT, # 7 # emote_mod
             self.ArgType.INT, # 8 # cid
             self.ArgType.INT, # 9 # sfx_delay
@@ -594,11 +594,11 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.INT, # 18 # nonint_pre
             self.ArgType.STR, # 19 # sfx_looping
             self.ArgType.INT, # 20 # screenshake
-            self.ArgType.STR, # 21 # frames_shake
-            self.ArgType.STR, # 22 # frames_realization
-            self.ArgType.STR, # 23 # frames_sfx
+            self.ArgType.STR_OR_EMPTY, # 21 # frames_shake
+            self.ArgType.STR_OR_EMPTY, # 22 # frames_realization
+            self.ArgType.STR_OR_EMPTY, # 23 # frames_sfx
             self.ArgType.INT, # 24 # additive
-            self.ArgType.STR, # 25  # effect
+            self.ArgType.STR_OR_EMPTY, # 25  # effect
         ):
             # 2.8 validation monstrosity. (rip 2.7)
             (
@@ -645,8 +645,8 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.STR, # 2 # folder
             self.ArgType.STR_OR_EMPTY, # 3 # anim
             self.ArgType.STR_OR_EMPTY, # 4  # text
-            self.ArgType.STR, # 5 # pos
-            self.ArgType.STR, # 6 # sfx
+            self.ArgType.STR_OR_EMPTY, # 5 # pos
+            self.ArgType.STR_OR_EMPTY, # 6 # sfx
             self.ArgType.INT, # 7 # emote_mod
             self.ArgType.INT, # 8 # cid
             self.ArgType.INT, # 9 # sfx_delay
@@ -656,16 +656,16 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.INT, # 13 # ding
             self.ArgType.INT, # 14 # color
             self.ArgType.STR_OR_EMPTY, # 15 # showname
-            self.ArgType.STR, # 16 # charid_pair
-            self.ArgType.STR, # 17 # offset_pair
+            self.ArgType.STR_OR_EMPTY, # 16 # charid_pair
+            self.ArgType.STR_OR_EMPTY, # 17 # offset_pair
             self.ArgType.INT, # 18 # nonint_pre
             self.ArgType.STR, # 19 # sfx_looping
             self.ArgType.INT, # 20 # screenshake
-            self.ArgType.STR, # 21 # frames_shake
-            self.ArgType.STR, # 22 # frames_realization
-            self.ArgType.STR, # 23 # frames_sfx
+            self.ArgType.STR_OR_EMPTY, # 21 # frames_shake
+            self.ArgType.STR_OR_EMPTY, # 22 # frames_realization
+            self.ArgType.STR_OR_EMPTY, # 23 # frames_sfx
             self.ArgType.INT, # 24 # additive
-            self.ArgType.STR, # 25 # effect
+            self.ArgType.STR_OR_EMPTY, # 25 # effect
             self.ArgType.INT, # 26 # third_charid
         ):
             # AO Golden validation monstrosity
@@ -714,8 +714,8 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.STR, # 2 # folder
             self.ArgType.STR_OR_EMPTY, # 3 # anim
             self.ArgType.STR_OR_EMPTY, # 4  # text
-            self.ArgType.STR, # 5 # pos
-            self.ArgType.STR, # 6 # sfx
+            self.ArgType.STR_OR_EMPTY, # 5 # pos
+            self.ArgType.STR_OR_EMPTY, # 6 # sfx
             self.ArgType.INT, # 7 # emote_mod
             self.ArgType.INT, # 8 # cid
             self.ArgType.INT, # 9 # sfx_delay
@@ -725,16 +725,16 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.INT, # 13 # ding
             self.ArgType.INT, # 14 # color
             self.ArgType.STR_OR_EMPTY, # 15 # showname
-            self.ArgType.STR, # 16 # charid_pair
-            self.ArgType.STR, # 17 # offset_pair
+            self.ArgType.STR_OR_EMPTY, # 16 # charid_pair
+            self.ArgType.STR_OR_EMPTY, # 17 # offset_pair
             self.ArgType.INT, # 18 # nonint_pre
             self.ArgType.STR, # 19 # sfx_looping
             self.ArgType.INT, # 20 # screenshake
-            self.ArgType.STR, # 21 # frames_shake
-            self.ArgType.STR, # 22 # frames_realization
-            self.ArgType.STR, # 23 # frames_sfx
+            self.ArgType.STR_OR_EMPTY, # 21 # frames_shake
+            self.ArgType.STR_OR_EMPTY, # 22 # frames_realization
+            self.ArgType.STR_OR_EMPTY, # 23 # frames_sfx
             self.ArgType.INT, # 24 # additive
-            self.ArgType.STR, # 25 # effect
+            self.ArgType.STR_OR_EMPTY, # 25 # effect
             self.ArgType.INT, # 26 # third_charid
             self.ArgType.STR_OR_EMPTY, # 27 # video
         ):
