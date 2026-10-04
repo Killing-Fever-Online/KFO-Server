@@ -1541,7 +1541,7 @@ class Area:
             # Add a testimony index marker in the showname
             if statement[15] == "":
                 # Since the char name might be subfoldered, use the foldername as the char name
-                statement[15] = f"[{idx+1}] {statement[2].rsplit("/", 1)[-1]}"
+                statement[15] = f"[{idx+1}] {statement[2].rsplit('/', 1)[-1]}"
             else:
                 statement[15] = f"[{idx+1}] {statement[15]}"
 

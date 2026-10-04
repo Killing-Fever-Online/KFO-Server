@@ -364,7 +364,7 @@ def ooc_cmd_kill(client, target, corpse):
             print(corpse)
             if corpse:
                 # Grab their showname without the folder path if char folder is used
-                name = f"Corpse of {target.showname.rsplit("/", 1)[-1]}"
+                name = f"Corpse of {target.showname.rsplit('/', 1)[-1]}"
                 desc = "They're dead...!"
                 image = "aai/blood.png"
                 char_folder = target.f_char_name_raw
