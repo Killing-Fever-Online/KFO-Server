@@ -1,9 +1,6 @@
-[tool.black]
-line-length = 120
-target-version = ["py311"]
-
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
+line-length = 120  # only if you add E501 to select below
 
 [tool.ruff.lint]
 select = [
@@ -17,7 +14,5 @@ select = [
           #           F841 unused local variable, ...)
   "S102", # flake8-bandit: exec() usage — banned for the same reason as eval()
   "S307", # flake8-bandit: eval() usage — banned because input is untrusted
+  "E501", # 
 ]
-
-[project.optional-dependencies]
-dev = ["ruff==0.6.9"]
