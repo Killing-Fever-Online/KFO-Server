@@ -1,4 +1,0 @@
-target-version = "py311"
-
-[lint]
-select = ["E", "F", "S307", "PGH001"]
