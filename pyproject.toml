@@ -3,3 +3,5 @@ line-length = 120
 target-version = ["py311"]
 # You can add patterns here if you need to exclude generated files, etc.
 # extend-exclude = []
+[tool.ruff.lint]
+select = ["S307", "PGH001"]
