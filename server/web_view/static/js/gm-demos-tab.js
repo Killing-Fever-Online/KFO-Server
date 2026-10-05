@@ -73,7 +73,7 @@ Write <code>&lt;num&gt;</code>, <code>&lt;and&gt;</code>, <code>&lt;percent&gt;<
 </tbody>
 </table>
 <p>Counting starts at 0. Swap <code>[i]</code> for <code>.count</code> to get a total. For
-safety, mod-only details like IP/HDID hashes and <code>is_mod</code> are never exposed to
+safety, mod-only details like IPIDs/HDIDs and <code>is_mod</code> are never exposed to
 scripts.</p>
 
 <h4>Character data</h4>

@@ -212,10 +212,10 @@ class AdminTab extends TabBase {
     }
 
     // One column set for every category, so the merged feed reads in
-    // sequence: Time | Kind | Where | Player | OOC Name | IPID | HDID |
+    // sequence: Time | Kind | Where | Player | OOC Name | IPID |
     // Target IPID | Event | Details.
     static COLUMNS = '<th>Time</th><th>Kind</th><th>Where</th><th>Player</th><th>OOC Name</th>'
-        + '<th>IPID</th><th>HDID</th><th>Target IPID</th><th>Event</th><th>Details</th>';
+        + '<th>IPID</th><th>Target IPID</th><th>Event</th><th>Details</th>';
 
     _categoryBadge(category) {
         const label = { area: 'AREA', connect: 'CONN', misc: 'MISC' }[category] || (category || '?').toUpperCase();
