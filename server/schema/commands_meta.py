@@ -32,7 +32,6 @@ class CommandOutputScrubber:
     # timestamps (3 groups) don't get flagged as IPv6 addresses.
     _IPV6_RE = re.compile(r"\b(?:[0-9a-fA-F]{1,4}:){3,7}[0-9a-fA-F]{1,4}\b")
     _IPID_LABEL_RE = re.compile(r"(?i)\bipid\b\s*[:#=]?\s*[\"']?[\w.\-]+")
-    _HDID_LABEL_RE = re.compile(r"(?i)\bhdid\b\s*[:#=]?\s*[\"']?[\w.\-]+")
     _MOD_PROFILE_RE = re.compile(r"(?i)\bmod\s*profile(\s*name)?\s*[:#=]?\s*[\"']?[\w.\- ]+")
 
     @classmethod
@@ -43,7 +42,6 @@ class CommandOutputScrubber:
     def _scrub_line(cls, line):
         text = str(line)
         text = cls._IPID_LABEL_RE.sub("[redacted]", text)
-        text = cls._HDID_LABEL_RE.sub("[redacted]", text)
         text = cls._MOD_PROFILE_RE.sub("[redacted]", text)
         text = cls._IPV6_RE.sub("[redacted]", text)
         text = cls._IPV4_RE.sub("[redacted]", text)

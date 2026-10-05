@@ -851,7 +851,7 @@ class Database:
             WHERE {" AND ".join(area_cond) if area_cond else "1=1"}
         """)
         connect_sql = dedent(f"""
-            SELECT c.event_time, 'connect', c.ipid, c.hdid, NULL, NULL,
+            SELECT c.event_time, 'connect', c.ipid, NULL, NULL, NULL,
                    NULL, NULL, NULL, NULL, NULL, NULL, NULL,
                    c.failed, NULL
             FROM connect_events c
