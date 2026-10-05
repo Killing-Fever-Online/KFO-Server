@@ -1167,7 +1167,7 @@ class AOProtocol(asyncio.Protocol):
                     evi.desc = f"(👀Discovered in pos: {evi.pos})\n{evi.desc}"
                     evi.pos = "all"
                     area.broadcast_evidence_list()
-                self.client.area.variables["presented_evidence_id"] = evi.id
+                self.client.area.variables["presented_evidence_id"] = evidence - 1
                 self.client.area.variables["presented_evidence_name"] = evi.name
                 asyncio.get_running_loop().call_soon(
                     area.trigger_evidence, evi, "present", self.client
