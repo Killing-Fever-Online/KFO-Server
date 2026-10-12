@@ -59,6 +59,7 @@ class RemoteClient(ClientManager.Client):
         self.name = name
         self.showname = name
         self.first_joined = False
+        self.is_remote_client = True
 
         # Output capture for command execution
         self.output = []
@@ -99,6 +100,9 @@ class RemoteClient(ClientManager.Client):
         if not self._in_area:
             return
         area = self.area
+        for c in self.server.client_manager.clients:
+            if c.following == self:
+                c.unfollow()
         if self in area.clients:
             area.clients.discard(self)
         if self in self.server.client_manager.clients:
