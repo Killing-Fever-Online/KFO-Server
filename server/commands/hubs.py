@@ -1001,6 +1001,11 @@ def ooc_cmd_ungm(client, ids):
     if not ids:
         ids = [client.id]
     for _id in ids:
+        if _id < 0:
+            client.send_ooc(
+                "You cannot remove id -1 (remote client)."
+            )
+            continue
         try:
             c = client.server.client_manager.get_targets(
                 client, TargetType.ID, _id, False

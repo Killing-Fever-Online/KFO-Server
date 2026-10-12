@@ -2144,6 +2144,11 @@ class Area:
         Remove a CM from the area.
         """
         self._owners.remove(client)
+
+        # remote clients should not affect anything else when removed
+        if isinstance(client, RemoteClient):
+            return
+
         # Clear the area popup if it was set while a CM was present and none remain.
         if len(self.real_cms()) == 0 and self.popup_held_by_cm:
             self.popup = ""

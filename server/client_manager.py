@@ -238,6 +238,8 @@ class ClientManager:
             # `_notify_monitors`. Kept on for real clients only.
             self._monitors_self_intercept = True
 
+            self.is_remote_client = False
+
         def send_raw_message(self, msg):
             """
             Send a raw packet over TCP.
@@ -1350,15 +1352,16 @@ class ClientManager:
                     raise ClientError("The automation executor cannot leave its area.")
                 if old_area.area_manager != area.area_manager:
                     raise ClientError("The automation executor cannot change hubs.")
-            # If this person switched hubs
-            if old_area.area_manager != area.area_manager:
-                # Make sure a single person can't hoard all the hubs
-                if self in old_area.area_manager.owners:
-                    old_area.area_manager.remove_owner(self)
-                # Don't allow multi-hub CMing either
-                for a in old_area.area_manager.areas:
-                    if self in a.owners:
-                        a.remove_owner(self)
+            else:
+                # If this person switched hubs
+                if old_area.area_manager != area.area_manager:
+                    # Make sure a single person can't hoard all the hubs
+                    if self in old_area.area_manager.owners:
+                        old_area.area_manager.remove_owner(self)
+                    # Don't allow multi-hub CMing either
+                    for a in old_area.area_manager.areas:
+                        if self in a.owners:
+                            a.remove_owner(self)
             if self in old_area.clients:
                 old_area.remove_client(self)
             self.area = area
@@ -2856,6 +2859,15 @@ class ClientManager:
                 # as that ID will no longer refer to this specific player.
                 if client.id in a.invite_list:
                     a.invite_list.discard(client.id)
+
+        if client.is_remote_client:
+            client.leave_area()
+            for c in self.server.client_manager.clients:
+                if c.following == client:
+                    c.unfollow()
+            self.clients.remove(client)
+            return
+
         heappush(self.cur_id, client.id)
         temp_ipid = client.ipid
         for c in self.server.client_manager.clients:

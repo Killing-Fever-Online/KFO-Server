@@ -481,6 +481,11 @@ class AreaManager:
         Remove a GM from the Hub.
         """
         self.owners.remove(client)
+
+        # remote clients should not affect anything else when removed
+        if isinstance(client, RemoteClient):
+            return
+
         if len(client.broadcast_list) > 0:
             client.broadcast_list.clear()
             client.send_ooc("Your broadcast list has been cleared.")
