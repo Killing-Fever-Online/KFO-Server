@@ -352,7 +352,7 @@ class Area:
         decorator.
         """
         if self._script_client is None:
-            can_gm = self.area_manager.can_gm or not self.area.can_cm
+            can_gm = self.area_manager.can_gm or not self.can_cm
             self._script_client = RemoteClient(self.server, is_mod=False, name="[SCRIPT]", is_gm=can_gm)
             self._script_client.is_automation = True
             self._script_client.join_area(self)
