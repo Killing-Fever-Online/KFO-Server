@@ -345,13 +345,14 @@ class Area:
         use GM commands (e.g. the hub-wide `/timer 0`). In claim-only hubs
         (e.g. KFO Hub 0, where only areas can be claimed) it is added to the
         area's CM owner set instead, so a CM-set automation script acts as an
-        area owner and can never escalate to GM power. It is added directly
-        (not via `add_owner`, which broadcasts and hides the client) because
-        many command bodies check the owner sets themselves rather than going
-        through the `@mod_only` decorator.
+        area owner and can never escalate to GM power (unless said area cannot
+        be CM-claimed). It is added directly (not via `add_owner`, which
+        broadcasts and hides the client) because many command bodies check the
+        owner sets themselves rather than going through the `@mod_only`
+        decorator.
         """
         if self._script_client is None:
-            can_gm = self.area_manager.can_gm
+            can_gm = self.area_manager.can_gm or not self.area.can_cm
             self._script_client = RemoteClient(self.server, is_mod=False, name="[SCRIPT]", is_gm=can_gm)
             self._script_client.is_automation = True
             self._script_client.join_area(self)
