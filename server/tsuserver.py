@@ -95,7 +95,7 @@ class TsuServer3:
         except FileNotFoundError:
             self.useGeoIp = False
 
-        self.ms_client = None
+        self.ms_clients = []
         sys.setrecursionlimit(50)
         try:
             self.load_config()
@@ -158,8 +158,18 @@ class TsuServer3:
             asyncio.ensure_future(ao_server_ws)
 
         if self.config["use_masterserver"]:
-            self.ms_client = MasterServerClient(self)
-            asyncio.ensure_future(self.ms_client.connect(), loop=loop)
+            masterservers = self.config.get("masterservers")
+            if not masterservers:
+                # pass the default to replicate old behavior
+                masterservers = ['https://servers.aceattorneyonline.com']
+                logger.warning(
+                    f'use_masterserver is enabled but no masterservers are defined. Defaulting to {masterservers[0]}...'
+                )
+            for base_url in masterservers:
+                ms_client = MasterServerClient(self)
+                self.ms_clients.append(ms_client)
+                asyncio.ensure_future(ms_client.connect(base_url), loop=loop)
+                logger.info(f"Attempting to advertise to {base_url}/servers...")
 
         if self.config["zalgo_tolerance"]:
             self.zalgo_tolerance = self.config["zalgo_tolerance"]
