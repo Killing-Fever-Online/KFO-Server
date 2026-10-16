@@ -161,7 +161,7 @@ class TsuServer3:
             masterservers = self.config.get("masterservers")
             if not masterservers:
                 # pass the default to replicate old behavior
-                masterservers = ['https://servers.aceattorneyonline.com']
+                masterservers = ['https://servers.aceattorneyonline.com/servers']
                 logger.warning(
                     f'use_masterserver is enabled but no masterservers are defined. Defaulting to {masterservers[0]}...'
                 )
@@ -169,7 +169,7 @@ class TsuServer3:
                 ms_client = MasterServerClient(self)
                 self.ms_clients.append(ms_client)
                 asyncio.ensure_future(ms_client.connect(base_url), loop=loop)
-                logger.info(f"Attempting to advertise to {base_url}/servers...")
+                logger.info(f"Attempting to advertise to {base_url}...")
 
         if self.config["zalgo_tolerance"]:
             self.zalgo_tolerance = self.config["zalgo_tolerance"]

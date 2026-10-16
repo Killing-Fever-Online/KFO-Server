@@ -101,7 +101,7 @@ class MasterServerClient:
 
         self.add_ws_info(advertise_body)
 
-        async with http.post(f'{base_url}/servers', json=advertise_body) as res:
+        async with http.post(f'{base_url}', json=advertise_body) as res:
             err_body = await res.text()
             try:
                 res.raise_for_status()
@@ -109,9 +109,9 @@ class MasterServerClient:
                 logging.error("(from %s) Got status=%s advertising %s: %s", base_url, err.status, advertise_body, err_body)
             else:
                 if not self.first_success:
-                    logger.info(f"Successfully advertised to {base_url}/servers!")
+                    logger.info(f"Successfully advertised to {base_url}!")
                     self.first_success = True
-        logger.debug('Heartbeat to %s/servers', base_url)
+        logger.debug('Heartbeat to %s', base_url)
 
     # Helper to add websocket info to advertise_body
     def add_ws_info(self, advertise_body: dict) -> None:
