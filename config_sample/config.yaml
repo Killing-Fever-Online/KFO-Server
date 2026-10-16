@@ -63,13 +63,13 @@ secure_websocket_port: 443
 # GET /api/gm/assets/config.
 asset_url:
 
-# Whether the server should be advertised on the server list.
-use_masterserver: true
+# Whether the server should be advertised on the server list. Flip this to "true" when you're ready to go public!
+use_masterserver: false
 
 # Which master servers to advertise to, each line starting with - means new list entry.
 # Please make sure to study each server listing's rules before advertising to them.
 masterservers:
-- https://servers.aceattorneyonline.com
+- https://servers.aceattorneyonline.com/servers
 
 # How the server should be listed on the server list.
 masterserver_name: My First Server
