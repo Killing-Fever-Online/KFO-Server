@@ -14,17 +14,15 @@ stun_servers = [
     ('stun.voip.blackberry.com', 3478),
 ]
 
-API_BASE_URL = 'https://servers.aceattorneyonline.com'
-
-
 class MasterServerClient:
     """Advertises information about this server to the masterserver."""
 
     def __init__(self, server):
         self.server = server
         self.interval = 60
+        self.first_success = False
 
-    async def connect(self):
+    async def connect(self, base_url):
         """
         Connects to the server and sends server information periodically.
 
@@ -45,7 +43,7 @@ class MasterServerClient:
         async with aiohttp.ClientSession() as http:
             while True:
                 try:
-                    await self.send_server_info(http)
+                    await self.send_server_info(base_url, http)
                 except aiohttp.ClientError:
                     # Masterserver is down or unreachable, may be temporary so log it as a warning
                     logger.warning('Failed to connect to the master server')
@@ -72,7 +70,7 @@ class MasterServerClient:
 
         return None
 
-    async def send_server_info(self, http: aiohttp.ClientSession):
+    async def send_server_info(self, base_url, http: aiohttp.ClientSession):
         """
         Send server information to the specified HTTP client session.
         Usually being the masterserver.
@@ -103,14 +101,17 @@ class MasterServerClient:
 
         self.add_ws_info(advertise_body)
 
-        async with http.post(f'{API_BASE_URL}/servers', json=advertise_body) as res:
+        async with http.post(f'{base_url}', json=advertise_body) as res:
             err_body = await res.text()
             try:
                 res.raise_for_status()
             except aiohttp.ClientResponseError as err:
-                logging.error("Got status=%s advertising %s: %s", err.status, advertise_body, err_body)
-
-        logger.debug('Heartbeat to %s/servers', API_BASE_URL)
+                logging.error("(from %s) Got status=%s advertising %s: %s", base_url, err.status, advertise_body, err_body)
+            else:
+                if not self.first_success:
+                    logger.info(f"Successfully advertised to {base_url}!")
+                    self.first_success = True
+        logger.debug('Heartbeat to %s', base_url)
 
     # Helper to add websocket info to advertise_body
     def add_ws_info(self, advertise_body: dict) -> None:

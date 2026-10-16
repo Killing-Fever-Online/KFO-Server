@@ -63,8 +63,14 @@ secure_websocket_port: 443
 # GET /api/gm/assets/config.
 asset_url:
 
-# Whether the server should be advertised on the server list.
-use_masterserver: true
+# Whether the server should be advertised on the server list. Flip this to "true" when you're ready to go public!
+use_masterserver: false
+
+# Which master servers to advertise to, each line starting with - means new list entry.
+# Please make sure to study each server listing's rules before advertising to them.
+masterservers:
+- https://servers.aceattorneyonline.com/servers
+
 # How the server should be listed on the server list.
 masterserver_name: My First Server
 masterserver_description: This is my flashy new server
@@ -105,7 +111,7 @@ wtce_floodguard:
   times_per_interval: 5
   interval_length: 10
   mute_length: 60
-  
+
 ooc_floodguard:
   times_per_interval: 5
   interval_length: 5
@@ -190,8 +196,8 @@ bridgebot:
   announce_ping: false
   announce_role:
 
-# Whether Discord webhooks are enabled, and if they are, the webhook URL to use.
-# If webhooks_enabled is set to false, no webhooks will function regardless of whether they are enabled or not.
+    # Whether Discord webhooks are enabled, and if they are, the webhook URL to use.
+    # If webhooks_enabled is set to false, no webhooks will function regardless of whether they are enabled or not.
 webhooks_enabled: false
 webhook_url: example.com
 
@@ -201,39 +207,46 @@ modcall_webhook:
   username: Modcall # the username the webhook will use
   avatar_url: # url of a custom avatar image, leave blank to use the avatar the webhook was set up with
   ping_on_no_mods: false # whether to ping mods if a modcall is received while no moderators are online
-  mod_role_id: # the role ID of the role you want pinged. leave blank to use @here instead
+  mod_role_id:
+    # the role ID of the role you want pinged. leave blank to use @here instead
 
 kick_webhook:
   enabled: true
   username: Kick
   avatar_url:
 
-ban_webhook: # fires on both regular and HDID bans
+
+ban_webhook:
+  # fires on both regular and HDID bans
   enabled: true
   username: Ban
   avatar_url:
+
 
 unban_webhook:
   enabled: true
   username: Unban
   avatar_url:
 
+
 login_webhook:
   enabled: true
   username: Login
   avatar_url:
+
 
 need_webhook:
   enabled: true
   delay: 60
   username: Need
   avatar_url:
-  color: "12745742"  
+  color: "12745742"
   pingoption: false
   role_id:
-  title: "AO NEED CALL"  
-  message: "A user has used the /need command for players in the Attorney Online server!"  
+  title: "AO NEED CALL"
+  message: "A user has used the /need command for players in the Attorney Online server!"
   url:
+
 
 doorman_webhook:
   hub_id: 0 # numeric Hub ID where doormen will be needed
@@ -242,29 +255,30 @@ doorman_webhook:
   delay: 120
   username: Doorman
   avatar_url:
-  color: "12745742"  
+  color: "12745742"
   pingoption: true
   role_id:
   title: "DOORMAN REQUESTED"
   message: "A user is alone and has no one to talk to!"
-  url: #webhook url
+  url:
+    #webhook url
 
-# GM Control Panel: the single web panel -- it doubles as the admin panel.
-# Lets an in-game GM micromanage their hub from a browser (areas as a graph,
-# who's present, characters, GM-scoped OOC commands, and the Automation Demos
-# system), and gives admin-role users the server log viewer + admin console.
-#
-# GMs bind the panel to their live client by running /gmpanel in-game, which
-# mints a one-time login link. Optionally, standing usernames/passwords (the
-# `users` block below) let an admin or GM log in remotely with no live client.
-# GMs never see ipid/hdid/IP -- that stays moderator-only (admin-role logins only).
+    # GM Control Panel: the single web panel -- it doubles as the admin panel.
+    # Lets an in-game GM micromanage their hub from a browser (areas as a graph,
+    # who's present, characters, GM-scoped OOC commands, and the Automation Demos
+    # system), and gives admin-role users the server log viewer + admin console.
+    #
+    # GMs bind the panel to their live client by running /gmpanel in-game, which
+    # mints a one-time login link. Optionally, standing usernames/passwords (the
+    # `users` block below) let an admin or GM log in remotely with no live client.
+    # GMs never see ipid/hdid/IP -- that stays moderator-only (admin-role logins only).
 gm_panel:
   enabled: false
   port: 27018
   host: "0.0.0.0"
-  session_ttl_seconds: 600         # remote admin/GM sessions expire after 10 min
-  login_token_ttl_seconds: 60       # one-time /gmpanel link expires fast
-  login_hub_ttl_seconds: 300        # time a gm login may sit on the hub picker
+  session_ttl_seconds: 600 # remote admin/GM sessions expire after 10 min
+  login_token_ttl_seconds: 60 # one-time /gmpanel link expires fast
+  login_hub_ttl_seconds: 300 # time a gm login may sit on the hub picker
   users:
     # username:
     #   password: changeme
@@ -282,8 +296,8 @@ gm_panel:
   # SSL: Option A - Self-signed or custom certificate (serves HTTPS directly)
   # Generate a self-signed cert:
   #   openssl req -x509 -newkey rsa:2048 -keyout config/gm_key.pem -out config/gm_cert.pem -days 3650 -nodes
-  ssl_cert:  # e.g. "config/gm_cert.pem"
-  ssl_key:   # e.g. "config/gm_key.pem"
+  ssl_cert: # e.g. "config/gm_cert.pem"
+  ssl_key: # e.g. "config/gm_key.pem"
 
   # SSL: Option B - Let's Encrypt via Caddy reverse proxy (requires a domain)
   # Set up a DNS A record pointing to this server, then create a Caddyfile:
@@ -291,7 +305,7 @@ gm_panel:
   #       reverse_proxy localhost:27018
   #   }
   # Then run: caddy run
-  domain:  # e.g. "gm.yourserver.com"
+  domain: # e.g. "gm.yourserver.com"
 
   # Rate limiting is not needed for login (there's no password to brute
   # force -- one-time tokens are high-entropy and single-use).
