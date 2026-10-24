@@ -605,6 +605,8 @@ class Area:
             self.auto_pair_cycle = area["auto_pair_cycle"]
         if "triggers" in area:
             self.triggers = area["triggers"]
+        if "variables" in area:
+            self.variables = area["variables"]
 
     def save(self):
         area = OrderedDict()
@@ -692,6 +694,8 @@ class Area:
         area["auto_pair_cycle"] = self.auto_pair_cycle
         if len(self.triggers) > 0:
             area["triggers"] = self.triggers
+        if len(self.variables) > 0:
+            area["variables"] = self.variables
         return area
 
     def play_client_ambience(self, client):
