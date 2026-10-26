@@ -2139,7 +2139,7 @@ class Area:
         self.update_judge_buttons(client)
 
         self.broadcast_ooc(f"{client.showname} [{client.id}] is CM in this area now.")
-
+        self.server.player_state_observer.notify_changed(client)
         bridge = getattr(self.server, "gm_panel_bridge", None)
         if bridge is not None:
             bridge.on_area_cm_roster_changed(self)
@@ -2187,7 +2187,7 @@ class Area:
             self.update_judge_buttons(client)
 
         self.broadcast_ooc(f"{client.showname} [{client.id}] is no longer CM in this area.")
-
+        self.server.player_state_observer.notify_changed(client)
         bridge = getattr(self.server, "gm_panel_bridge", None)
         if bridge is not None:
             bridge.on_area_cm_roster_changed(self)
