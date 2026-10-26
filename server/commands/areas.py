@@ -416,6 +416,7 @@ def ooc_cmd_invite(client, target):
     try:
         for c in targets:
             client.area.invite_list.add(c.id)
+            c.server.player_state_observer.notify_changed(c)
             client.send_ooc(f"{c.showname} is invited to your area.")
             c.send_ooc(
                 f"You were invited and given access to {client.area.name}.")
@@ -456,6 +457,7 @@ def ooc_cmd_uninvite(client, target):
                 c.send_ooc("You were removed from the area whitelist.")
                 database.log_area("uninvite", client, client.area, target=c)
                 client.area.invite_list.discard(c.id)
+                c.server.player_state_observer.notify_changed(c)
         except AreaError:
             raise
         except ClientError:

@@ -2430,6 +2430,7 @@ class ClientManager:
             """Set the character's description character data."""
             self.area.area_manager.set_character_data(
                 self.char_id, "desc", value)
+            self.server.player_state_observer.notify_changed(self)
 
         @property
         def hidden(self):
@@ -2560,24 +2561,28 @@ class ClientManager:
                 self.area.broadcast_player_list()
             else:
                 self.area.broadcast_player_list_to_target(self)
+            self.server.player_state_observer.notify_changed(self)
 
         def deafen(self, tog=True):
             """Deafen the client: IC messages arrive as blankposts (dots)."""
             self.deafened = tog
             msg = "no longer" if not tog else "now"
             self.send_ooc(f"You are {msg} deafened: IC messages are muffled.")
+            self.server.player_state_observer.notify_changed(self)
 
         def player_mute(self, tog=True):
             """Mute the client from sending IC messages (does not affect OOC)."""
             self.player_muted = tog
             msg = "no longer" if not tog else "now"
             self.send_ooc(f"You are {msg} player-muted from sending IC messages.")
+            self.server.player_state_observer.notify_changed(self)
 
         def force_blankpost(self, tog=True):
             """Force the client to only be able to send blankposts."""
             self.forced_blankpost = tog
             msg = "no longer" if not tog else "now"
             self.send_ooc(f"You are {msg} forced to only blankpost in IC.")
+            self.server.player_state_observer.notify_changed(self)
 
         def deafen_message(self, msg, ao_packet=True):
             """Muffle a message: legible characters become dots, while
@@ -2622,6 +2627,7 @@ class ClientManager:
             self.send_ooc(
                 f"You are {msg} frozen from moving between areas."
             )
+            self.server.player_state_observer.notify_changed(self)
 
         def sneak(self, tog=True):
             self.sneaking = tog
@@ -2631,13 +2637,17 @@ class ClientManager:
             self.send_ooc(
                 f"You are {msg} sneaking (area transfer announcements will {msg} be hidden)."
             )
+            self.server.player_state_observer.notify_changed(self)
 
         def follow(self, target):
             try:
-                self.change_area(target.area)
+                if self.area != target.area:
+                    self.change_area(target.area)
                 self.following = target
                 self.send_ooc(
                     f"You are now following [{target.id}] {target.showname}.")
+                self.server.player_state_observer.notify_changed(self)
+                self.server.player_state_observer.notify_changed(target)
             except ValueError:
                 raise
             except (AreaError, ClientError):
@@ -2645,14 +2655,14 @@ class ClientManager:
 
         def unfollow(self, silent=False):
             if self.following is not None:
-                try:
-                    if not silent:
-                        self.send_ooc(
-                            f"You are no longer following [{self.following.id}] {self.following.showname}."
-                        )
-                    self.following = None
-                except Exception:
-                    self.following = None
+                if not silent:
+                    self.send_ooc(
+                        f"You are no longer following [{self.following.id}] {self.following.showname}."
+                    )
+                following = self.following
+                self.following = None
+                self.server.player_state_observer.notify_changed(self)
+                self.server.player_state_observer.notify_changed(following)
 
         def change_position(self, pos=""):
             """
@@ -2672,6 +2682,7 @@ class ClientManager:
             self.send_command("SP", self.pos)
             # Send evidence list
             self.update_evidence_list()
+            self.server.player_state_observer.notify_changed(self)
 
         def set_mod_call_delay(self):
             """Begin the mod call cooldown."""

@@ -1258,14 +1258,18 @@ def ooc_cmd_chardesc(client, arg):
             ooc_cmd_chardesc_clear(client)
             return
         client.desc = arg
+        desc = arg[:128]
+        if len(arg) > len(desc):
+            desc += f"... Use /chardesc {client.id} to read the rest."
         if not client.hidden and not client.sneaking:
-            desc = arg[:128]
-            if len(arg) > len(desc):
-                desc += f"... Use /chardesc {client.id} to read the rest."
             client.area.broadcast_ooc(
                 f"{client.showname} changed their character description to: {desc}."
             )
             client.area.broadcast_player_list()
+        else:
+            client.send_ooc(
+                f"You stealthily changed your character description to: {desc}."
+            )
         database.log_area("chardesc.change", client, client.area, message=arg)
 
 
