@@ -114,12 +114,15 @@ class PlayerStateObserver:
 
     def update_player_state(self, target, client):
         target.send_command("PU", client.id, self.NAME, client.name)
-        target.send_command("PU", client.id, self.CHARACTER, client.char_name)
+        target.send_command("PU", client.id, self.CHARACTER, client.f_char_name)
         target.send_command("PU", client.id,
                             self.CHARACTER_NAME, client.showname)
         target.send_command("PU", client.id, self.AREA_ID,
                             self.get_area_id(target, client))
-        target.send_command("PU", client.id, self.DESC, client.desc)
+        desc = client.desc
+        if client.iniswap != "":
+            desc = f"[Char Folder: {client.char_name}]\n{desc}"
+        target.send_command("PU", client.id, self.DESC, desc)
         format = self.format
         info = ""
         if client in client.area.afkers:

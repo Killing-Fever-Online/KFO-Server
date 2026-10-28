@@ -2652,7 +2652,6 @@ class ClientManager:
                 self.send_ooc(
                     f"You are now following [{target.id}] {target.showname}.")
                 self.server.player_state_observer.notify_changed(self)
-                self.server.player_state_observer.notify_changed(target)
             except ValueError:
                 raise
             except (AreaError, ClientError):
@@ -2667,7 +2666,6 @@ class ClientManager:
                 following = self.following
                 self.following = None
                 self.server.player_state_observer.notify_changed(self)
-                self.server.player_state_observer.notify_changed(following)
 
         def change_position(self, pos=""):
             """

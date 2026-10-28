@@ -1637,14 +1637,17 @@ class Area:
                     # chara_client_info["HDID"] = str(c.hdid)
                     chara_client_info["IPID"] = str(c.ipid)
 
-                # if(c.files):
-                #     chara_client_info["url"] = c.files[1]
+                if c.char_url != "":
+                    chara_client_info["url"] = c.char_url
 
                 # if(c.char_outfit):
                 #     chara_client_info["outfit"] = c.char_outfit
 
                 if c.desc:
                     chara_client_info["status"] = c.desc
+
+                
+                
                 player_data_to_send.append(chara_client_info)
         return_data["data"] = player_data_to_send
 

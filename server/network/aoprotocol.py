@@ -806,6 +806,9 @@ class AOProtocol(asyncio.Protocol):
             self.client.send_ooc(
                 "Showname changes are forbidden in this area!")
             return
+        broadcast_state = False
+        old_iniswap_state = self.client.iniswap
+        # Test if the client is iniswap and also update client.iniswap to it
         if self.client.area.is_iniswap(self.client, pre, anim, folder, sfx):
             folder = self.client.char_name
             self.client.send_ooc(
@@ -816,6 +819,8 @@ class AOProtocol(asyncio.Protocol):
             self.client.send_ooc(
                 "You may not iniswap while you are charcursed!")
             return
+        # we broadcast our playerlist state if we iniswapped
+        broadcast_state = old_iniswap_state != self.client.iniswap
         if (self.server.config["block_relative"]):
             pre = derelative(pre)
             anim = derelative(anim)
@@ -1181,7 +1186,10 @@ class AOProtocol(asyncio.Protocol):
         if self.client.used_showname_command:
             showname = self.client.showname
         self.client.showname = showname
-        if self.client.showname != old_showname:
+
+        # we broadcast our state if our showname doesn't match
+        broadcast_state = broadcast_state or self.client.showname != old_showname
+        if broadcast_state:
             self.server.player_state_observer.notify_changed(self.client)
 
         # Here, we check the pair stuff, and save info about it to the client.
@@ -2254,12 +2262,6 @@ class AOProtocol(asyncio.Protocol):
         if not self.validate_net_cmd(args, self.ArgType.INT, self.ArgType.STR, self.ArgType.STR, needs_auth=False):
             return
 
-        #  char_name
-        if args[1].lower() != self.client.char_name.lower():
-        #                       char_name
-            self.client.iniswap = args[1]
-        else:
-            self.client.iniswap = ""
         # Note: Updating the last_sprite could make things like updating the pair emote by just starting to type.
         # For example, this could be done by adding:
         #   self.client.last_sprite = args[2]
@@ -2300,11 +2302,6 @@ class AOProtocol(asyncio.Protocol):
             # If planned to add more authority levels, this "if" should be reconsidered.
             return
         
-        # char_name
-        if args[2].lower() != self.client.char_name.lower():
-            self.client.iniswap = args[2]
-        else:
-            self.client.iniswap = ""
         old_link = self.client.char_url
         # set the link
         self.client.char_url = args[3].strip()
