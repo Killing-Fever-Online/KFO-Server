@@ -1182,8 +1182,7 @@ class AOProtocol(asyncio.Protocol):
             showname = self.client.showname
         self.client.showname = showname
         if self.client.showname != old_showname:
-            self.server.player_state_observer.notify_character_name_changed(
-                self.client)
+            self.server.player_state_observer.notify_changed(self.client)
 
         # Here, we check the pair stuff, and save info about it to the client.
         # Notably, while we only get a charid_pair and an offset, we send back a chair_pair, an emote, a talker offset
@@ -1773,7 +1772,7 @@ class AOProtocol(asyncio.Protocol):
 
         if self.client.name != args[0]:
             self.client.name = args[0]
-            self.server.player_state_observer.notify_name_changed(self.client)
+            self.server.player_state_observer.notify_changed(self.client)
         if args[1].lstrip() != args[1] and args[1].lstrip().startswith("/"):
             self.client.send_ooc(
                 "Your message was not sent for safety reasons: you left space before that slash."

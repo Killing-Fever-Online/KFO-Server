@@ -313,6 +313,7 @@ def ooc_cmd_login(client, password):
     client.area.broadcast_area_list(client)
 
     client.area.broadcast_evidence_list()
+    client.server.player_state_observer.notify_changed(client)
     client.send_ooc("Logged in as a moderator.")
     client.server.webhooks.login(client, login_name)
     database.log_misc("login", client, data={"profile": login_name})
@@ -365,6 +366,7 @@ def ooc_cmd_unmod(client):
     client.area.broadcast_area_list(client)
 
     client.area.broadcast_evidence_list()
+    client.server.player_state_observer.notify_changed(client)
     client.send_ooc("You're no longer a mod.")
 
 
