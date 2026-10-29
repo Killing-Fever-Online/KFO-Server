@@ -673,6 +673,7 @@ def ooc_cmd_toggle_getareas(client, tog):
     client.area.area_manager.broadcast_ooc(
         f"Use of /getareas has been {toggle} for this hub."
     )
+    client.server.player_state_observer.refresh_hub(client.area.area_manager)
 
 
 @mod_only(hub_owners=True)

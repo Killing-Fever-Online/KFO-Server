@@ -373,7 +373,7 @@ class AOProtocol(asyncio.Protocol):
         if not self.client.joined:
             self.client.joined = True
             self.client.area.area_manager.send_arup_players()
-            self.server.player_state_observer.register_client(self.client)
+            self.server.player_state_observer.notify_changed(self.client)
 
     def net_cmd_cc(self, args):
         """Character selection.

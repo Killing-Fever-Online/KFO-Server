@@ -361,7 +361,7 @@ def ooc_cmd_kill(client, target, corpse):
         )
     try:
         for target in targets:
-            print(corpse)
+            kill_msg = f"You killed [{target.id}] {target.showname}"
             if corpse:
                 # Grab their showname without the folder path if char folder is used
                 name = f"Corpse of {target.showname.rsplit('/', 1)[-1]}"
@@ -374,11 +374,15 @@ def ooc_cmd_kill(client, target, corpse):
                 if pos == "":
                     pos = "all"
                 target.area.evi_list.add_evidence(
-                    client, name, desc, image, target.pos
+                    client, name, desc, image, pos
                 )
                 target.area.broadcast_evidence_list()
+                kill_msg += " leaving behind a corpse!"
+            else:
+                kill_msg += " without a trace left behind..."
             force_switch(client, target, "-1")
-            target.send_ooc(f"💀You are dead!💀")
+            target.send_ooc("💀You are dead!💀")
+            client.send_ooc(kill_msg)
     except Exception as ex:
         raise ArgumentError(
             f"Error encountered: {ex}. Use /kill <id(s)> as a mod or area owner."
