@@ -34,15 +34,17 @@ class PlayerStateObserver:
         """Clients in the hub that completed joining and receive PR/PU."""
         return [c for c in hub.clients if c.joined]
 
-    def _can_see_hidden(self, viewer):
-        """Mods, GMs and the area's CMs may see hidden clients."""
+    def _allowed(self, viewer):
+        """Mods/GMs role"""
         return viewer.is_mod or viewer in viewer.area.owners
 
     def _desired_ids(self, viewer):
         """IDs the viewer should currently have on its player list."""
         return {
             c.id for c in self._recipients(viewer.area.area_manager)
-            if not c.hidden or self._can_see_hidden(viewer)
+            if (c.area == viewer.area or viewer.area.area_manager.can_getareas) and
+            self._allowed(viewer) or 
+            (c.area.can_getarea and not c.area.dark and not c.hidden)
         }
 
     def _is_listed_for(self, viewer, client):
@@ -51,7 +53,7 @@ class PlayerStateObserver:
             client.joined
             and client.area is not None
             and client.area.area_manager is viewer.area.area_manager
-            and (not client.hidden or self._can_see_hidden(viewer))
+            and (not client.hidden or self._allowed(viewer))
         )
 
     def _sync_player(self, viewer, client):
@@ -132,7 +134,7 @@ class PlayerStateObserver:
             if client.hidden_in is not None:
                 name = f":{client.area.evi_list.evidences[client.hidden_in].name}"
             info += f"📦{name}"
-        elif (target == client or self._can_see_hidden(target)) and client.sneaking:
+        elif (target == client or self._allowed(target)) and client.sneaking:
             info += f"🥷"
         if client.is_mod:
             info += "[M]"

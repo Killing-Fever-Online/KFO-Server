@@ -2999,6 +2999,7 @@ class ClientManager:
             client.area.afkers.append(client)
         if not client.hidden and not client.sneaking:
             client.area.broadcast_player_list()
+        self.server.player_state_observer.notify_changed(client)
 
     def refresh_music(self, clients=None, reload=False):
         """
