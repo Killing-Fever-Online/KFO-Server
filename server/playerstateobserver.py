@@ -116,6 +116,16 @@ class PlayerStateObserver:
             viewer.send_command("PR", player_id, self.REMOVE)
         viewer.player_list_ids.clear()
 
+    def unregister_client(self, client):
+        """Drop the client from the player list of everyone still connected."""
+        if client.area is None:
+            return
+        for target in self._recipients(client.area.area_manager):
+            if client.id in target.player_list_ids:
+                target.send_command("PR", client.id, self.REMOVE)
+                target.player_list_ids.discard(client.id)
+        client.player_list_ids.clear()
+
     def send_player_state(self, target, client):
         """Send every field of a single player to one target."""
         target.send_command("PR", client.id, self.ADD)

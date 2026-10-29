@@ -310,7 +310,7 @@ class TsuServer3:
                 area.broadcast_ooc(
                     f"[{client.id}] {client.showname} has disconnected.")
             area.remove_client(client)
-        self.player_state_observer.notify_changed(client)
+        self.player_state_observer.unregister_client(client)
         self.client_manager.remove_client(client)
 
     @property
