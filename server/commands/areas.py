@@ -289,6 +289,7 @@ def ooc_cmd_area_visible(client):
     client.available_areas_only = not client.available_areas_only
     toggle = "enabled" if client.available_areas_only else "disabled"
     client.area.broadcast_area_list(client)
+    client.server.player_state_observer.notify_changed(client)
     client.send_ooc(
         f"You have {toggle} only displaying player-visible areas."
     )

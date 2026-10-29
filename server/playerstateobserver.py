@@ -28,7 +28,7 @@ class PlayerStateObserver:
 
     def __init__(self, server):
         self.server = server
-        self.format = "[{id}] {displayname}: {username}"
+        self.format = "[{id}] {displayname}"
 
     def _recipients(self, hub):
         """Clients in the hub that completed joining and receive PR/PU."""
@@ -42,25 +42,22 @@ class PlayerStateObserver:
         """Whether the client should be listed for the viewer right now."""
         if not (client.joined and client.area is not None):
             return False
+        # We always see our own state
+        if viewer is client:
+            return True
         if client.area.area_manager is not viewer.area.area_manager:
             return False
-        # We always see our own state
-        if viewer == client:
-            return True
-
-        same_area = client.area is viewer.area
-
-        # (same area OR the hub allows seeing areas) AND the viewer is allowed
-        if (
-            (same_area or viewer.area.area_manager.can_getareas)
-            and self._allowed(viewer)
+        # If we're GM/Mod and we're not deliberately hiding all areas for ourselves
+        if self._allowed(viewer) and (
+            client.area is viewer.area or
+            not viewer.available_areas_only
         ):
             return True
-
         # Otherwise the client's area must be visible and the client not hidden
+        area_visible = client.area is viewer.area or viewer.area.area_manager.can_getareas
         return (
-            same_area and 
-            client.area.can_getarea
+            area_visible
+            and client.area.can_getarea
             and not client.area.dark
             and not client.hidden
             and not viewer.blinded
@@ -132,41 +129,45 @@ class PlayerStateObserver:
         target.send_command("PR", client.id, self.ADD)
         self.update_player_state(target, client)
 
-    def update_player_state(self, target, client):
-        target.send_command("PU", client.id, self.NAME, client.name)
-        target.send_command("PU", client.id, self.CHARACTER, client.f_char_name)
-        target.send_command("PU", client.id,
-                            self.CHARACTER_NAME, client.showname)
-        target.send_command("PU", client.id, self.AREA_ID,
-                            self.get_area_id(target, client))
-        desc = client.desc
-        if client.iniswap != "":
-            desc = f"[Char Folder: {client.char_name}]\n{desc}"
-        desc += f"\narea: {self.get_area_id(target, client)}"
-        target.send_command("PU", client.id, self.DESC, desc)
+    def update_player_state(self, viewer, target):
         format = self.format
+        target_name = ""
+        # Only GMs/Mods get OOC names on KFO
+        if self._allowed(viewer):
+            format += ": {username}"
+            target_name = target.name
+        viewer.send_command("PU", target.id, self.NAME, target_name)
+        viewer.send_command("PU", target.id, self.CHARACTER, target.f_char_name)
+        viewer.send_command("PU", target.id,
+                            self.CHARACTER_NAME, target.showname)
+        viewer.send_command("PU", target.id, self.AREA_ID,
+                            self.get_area_id(viewer, target))
+        desc = target.desc
+        if target.iniswap != "":
+            desc = f"[Char Folder: {target.char_name}]\n{desc}"
+        viewer.send_command("PU", target.id, self.DESC, desc)
         info = ""
-        if client in client.area.afkers:
+        if target in target.area.afkers:
             info += "💤"
-        if client.hidden:
+        if target.hidden:
             name = ""
-            if client.hidden_in is not None:
-                name = f":{client.area.evi_list.evidences[client.hidden_in].name}"
+            if target.hidden_in is not None:
+                name = f":{target.area.evi_list.evidences[target.hidden_in].name}"
             info += f"📦{name}"
-        elif (target == client or self._allowed(target)) and client.sneaking:
+        elif (viewer == target or self._allowed(viewer)) and target.sneaking:
             info += f"🥷"
-        if client.is_mod:
+        if target.is_mod:
             info += "[M]"
-        elif client in target.area.area_manager.owners:
+        elif target in viewer.area.area_manager.owners:
             info += "[GM]"
-        elif client in target.area._owners:
+        elif target in viewer.area._owners:
             info += "[CM]"
         if info != "":
             format = f"{info}{format}"
-        if target.following == client:
+        if viewer.following == target:
             format += " 👣"
-        target.send_command("PU", client.id, self.FORMAT, format)
-        self.send_command_list(target, client)
+        viewer.send_command("PU", target.id, self.FORMAT, format)
+        self.send_command_list(viewer, target)
 
     def send_command_list(self, target, client):
         # list of command actions the server lets you do on the player
