@@ -59,6 +59,7 @@ class PlayerStateObserver:
 
         # Otherwise the client's area must be visible and the client not hidden
         return (
+            same_area and 
             client.area.can_getarea
             and not client.area.dark
             and not client.hidden
@@ -76,13 +77,13 @@ class PlayerStateObserver:
         """Add, update or remove one player in one viewer's list."""
         desired = self._is_listed_for(viewer, client)
         present = client.id in viewer.player_list_ids
-
-        if desired and not present:
-            self.send_player_state(viewer, client)
-            viewer.player_list_ids.add(client.id)
-        elif desired and present:
-            self.update_player_state(viewer, client)
-        elif not desired and present:
+        if desired:
+            if present:
+                self.update_player_state(viewer, client)
+            else:
+                self.send_player_state(viewer, client)
+                viewer.player_list_ids.add(client.id)
+        elif present:
             viewer.send_command("PR", client.id, self.REMOVE)
             viewer.player_list_ids.discard(client.id)
 
@@ -141,6 +142,7 @@ class PlayerStateObserver:
         desc = client.desc
         if client.iniswap != "":
             desc = f"[Char Folder: {client.char_name}]\n{desc}"
+        desc += f"\narea: {self.get_area_id(target, client)}"
         target.send_command("PU", client.id, self.DESC, desc)
         format = self.format
         info = ""
