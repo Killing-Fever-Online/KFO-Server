@@ -289,6 +289,7 @@ def ooc_cmd_area_visible(client):
     client.available_areas_only = not client.available_areas_only
     toggle = "enabled" if client.available_areas_only else "disabled"
     client.area.broadcast_area_list(client)
+    client.server.player_state_observer.notify_changed(client)
     client.send_ooc(
         f"You have {toggle} only displaying player-visible areas."
     )
@@ -946,6 +947,7 @@ def ooc_cmd_lights(client, tog):
         c.send_command("BN", c.view_background(), pos, c.area.overlay)
     client.send_ooc(f"This area is {stat} dark.")
     client.area.broadcast_evidence_list()
+    client.server.player_state_observer.refresh_hub(client.area.area_manager)
 
 
 @command(Arg("mode", choices=["double", "triple"]))

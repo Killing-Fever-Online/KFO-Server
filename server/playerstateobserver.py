@@ -8,6 +8,11 @@ class PlayerStateObserver:
         PU#<player_id: int>#<data_type: int>#<data: string>#%
 
     Clients older than 2.11 drop both packets, so they are sent unconditionally.
+
+    The desired player list is always derived from the live hub/client objects.
+    The only state kept is ``client.player_list_ids``, the IDs already sent to
+    that particular client via PR ADD. PR ADD appends on the client, so it must
+    not be repeated for an ID the client already has.
     """
 
     ADD = 0
@@ -20,59 +25,155 @@ class PlayerStateObserver:
     DESC = 4
     FORMAT = 5
     COMMANDS = 6
+    CATEGORY_NAME = 7
 
     def __init__(self, server):
         self.server = server
-        # Clients that receive player list packets.
-        self.client_list = []
-        # Clients that are currently listed for everyone else.
-        self.listed = set()
-        # The format to use
-        self.format = "[{id}] {displayname} {username}"
+        self.format = "[{id}] {displayname}"
 
-    def register_client(self, client):
-        """Hand the client the player list, then announce it to everyone else."""
-        if client in self.client_list:
-            return
-        self.client_list.append(client)
-        self.send_player_list(client)
-        self.notify_visibility_changed(client)
+    def _recipients(self, hub):
+        """Clients in the hub that completed joining and receive PR/PU."""
+        return [c for c in hub.clients if c.joined]
+
+    def _allowed(self, viewer):
+        """Mods/GMs role"""
+        return viewer.is_mod or viewer in viewer.area.owners
+
+    def _is_listed_for(self, viewer, client):
+        """Whether the client should be listed for the viewer right now."""
+        if not (client.joined and client.area is not None):
+            return False
+        # We always see our own state
+        if viewer is client:
+            return True
+        if client.area.area_manager is not viewer.area.area_manager:
+            return False
+        # If we're GM/Mod and we're not deliberately hiding all areas for ourselves
+        if self._allowed(viewer) and (
+            client.area is viewer.area or
+            not viewer.available_areas_only
+        ):
+            return True
+        # Otherwise the client's area must be visible and the client not hidden
+        area_visible = client.area is viewer.area or viewer.area.area_manager.can_getareas
+        return (
+            area_visible
+            and client.area.can_getarea
+            and not client.area.dark
+            and not client.hidden
+            and not viewer.blinded
+        )
+
+    def _desired_ids(self, viewer):
+        """IDs the viewer should currently have on its player list."""
+        return {
+            c.id for c in self._recipients(viewer.area.area_manager)
+            if self._is_listed_for(viewer, c)
+        }
+
+    def _sync_player(self, viewer, client):
+        """Add, update or remove one player in one viewer's list."""
+        desired = self._is_listed_for(viewer, client)
+        present = client.id in viewer.player_list_ids
+        if desired:
+            if present:
+                self.update_player_state(viewer, client)
+            else:
+                self.send_player_state(viewer, client)
+                viewer.player_list_ids.add(client.id)
+        elif present:
+            viewer.send_command("PR", client.id, self.REMOVE)
+            viewer.player_list_ids.discard(client.id)
+
+    def _sync_viewer(self, viewer):
+        """Reconcile the viewer's whole list against the live hub state."""
+        desired = self._desired_ids(viewer)
+
+        for player_id in viewer.player_list_ids - desired:
+            viewer.send_command("PR", player_id, self.REMOVE)
+        viewer.player_list_ids.intersection_update(desired)
+
+        for other in self._recipients(viewer.area.area_manager):
+            if other.id not in desired:
+                continue
+            if other.id in viewer.player_list_ids:
+                # The viewer already has this row; only refresh its commands.
+                if other is not viewer:
+                    self.update_player_state(viewer, other)
+            else:
+                self.send_player_state(viewer, other)
+                viewer.player_list_ids.add(other.id)
+
+    def refresh_hub(self, hub):
+        """Reconcile every viewer, sending packets only for changed entries."""
+        for viewer in self._recipients(hub):
+            self._sync_viewer(viewer)
+
+    def _clear_player_list(self, viewer):
+        """Forget everything the viewer has listed, removing each row."""
+        for player_id in list(viewer.player_list_ids):
+            viewer.send_command("PR", player_id, self.REMOVE)
+        viewer.player_list_ids.clear()
 
     def unregister_client(self, client):
         """Drop the client from the player list of everyone still connected."""
-        if client not in self.client_list:
+        if client.area is None:
             return
-        self.client_list.remove(client)
-        if client in self.listed:
-            self.listed.discard(client)
-            self.send_to_client_list(client, "PR", client.id, self.REMOVE)
-
-    def send_player_list(self, client, exclude_self = False):
-        """Send every listed player of the client's hub to that client."""
-        for other in self.client_list:
-            if exclude_self and other is client:
-                continue
-            if other not in self.listed:
-                continue
-            if other.area.area_manager != client.area.area_manager:
-                continue
-            self.send_player_state(client, other)
+        for target in self._recipients(client.area.area_manager):
+            if client.id in target.player_list_ids:
+                target.send_command("PR", client.id, self.REMOVE)
+                target.player_list_ids.discard(client.id)
+        client.player_list_ids.clear()
 
     def send_player_state(self, target, client):
         """Send every field of a single player to one target."""
         target.send_command("PR", client.id, self.ADD)
         self.update_player_state(target, client)
 
-    def update_player_state(self, target, client):
-        target.send_command("PU", client.id, self.NAME, client.name)
-        target.send_command("PU", client.id, self.CHARACTER, client.char_name)
-        target.send_command("PU", client.id,
-                            self.CHARACTER_NAME, client.showname)
-        target.send_command("PU", client.id, self.AREA_ID,
-                            self.get_area_id(target, client))
-        target.send_command("PU", client.id, self.DESC, client.desc)
-        target.send_command("PU", client.id, self.FORMAT, self.format)
+    def update_player_state(self, viewer, target):
+        format = self.format
+        target_name = ""
+        # Only GMs/Mods get OOC names on KFO
+        if self._allowed(viewer):
+            format += ": {username}"
+            target_name = target.name
+        viewer.send_command("PU", target.id, self.NAME, target_name)
+        viewer.send_command("PU", target.id, self.CHARACTER, target.f_char_name)
+        viewer.send_command("PU", target.id,
+                            self.CHARACTER_NAME, target.showname)
+        viewer.send_command("PU", target.id, self.AREA_ID,
+                            self.get_area_id(viewer, target))
+        # Send explicit category name so swapping between hub/area list doesn't screw things up
+        viewer.send_command("PU", target.id, self.CATEGORY_NAME,
+                            f"[{target.area.id}] {target.area.name}")
+        desc = target.desc
+        if target.iniswap != "":
+            desc = f"[Char Folder: {target.char_name}]\n{desc}"
+        viewer.send_command("PU", target.id, self.DESC, desc)
+        info = ""
+        if target in target.area.afkers:
+            info += "💤"
+        if target.hidden:
+            name = ""
+            if target.hidden_in is not None:
+                name = f":{target.area.evi_list.evidences[target.hidden_in].name}"
+            info += f"📦{name}"
+        elif (viewer == target or self._allowed(viewer)) and target.sneaking:
+            info += f"🥷"
+        if target.is_mod:
+            info += "[M]"
+        elif target in viewer.area.area_manager.owners:
+            info += "[GM]"
+        elif target in viewer.area._owners:
+            info += "[CM]"
+        if info != "":
+            format = f"{info}{format}"
+        if viewer.following == target:
+            format += " 👣"
+        viewer.send_command("PU", target.id, self.FORMAT, format)
+        self.send_command_list(viewer, target)
 
+    def send_command_list(self, target, client):
         # list of command actions the server lets you do on the player
         # format: Action Name{}ooc message to send
         # {} is a delimiter where the stuff behfore it is the action name
@@ -84,60 +185,60 @@ class PlayerStateObserver:
         command_list = []
         if target != client:
             if target.following == client:
-                command_list.append("Unfollow Player{}/unfollow")
+                command_list.append("Unfollow{}/unfollow")
             else:
-                command_list.append("Follow Player{}/follow {id}")
+                command_list.append("Follow{}/follow {id}")
+            # If we see them, we can probably move towards them.
+            command_list.append(f"Move Towards{{}}/area {target.area.id}")
         else:
             command_list.append("Unfollow Others{}/unfollow")
             if target.sneaking:
                 command_list.append("Unsneak{}/unsneak")
             else:
                 command_list.append("Sneak{}/sneak")
-        command_list.extend([
-            "Vote for Player{}/vote {id}",
-            "Check Description{}/chardesc {id}"
-        ])
+        command_list.append("Cast a Vote{}/vote {id}")
+        command_list.append("Check Description{}/chardesc {id}")
         # is CM, give CM commands
         if target in target.area.owners:
             if client.id in target.area.invite_list:
-                command_list.append("Uninvite Player from Speaking{}/uninvite {id}")
+                command_list.append("Uninvite from Speaking{}/uninvite {id}")
             else:
-                command_list.append("Invite Player to Speak{}/invite {id}")
+                command_list.append("Invite to Speak{}/invite {id}")
             if not client.char_id == -1:
-                command_list.append("Kill Player{}/kill {id}")
+                command_list.append("Kill w/ Corpse{}/kill {id} 1")
+                command_list.append("Kill (Disappear){}/kill {id} 0")
             if client.frozen:
-                command_list.append("Unfreeze Player{}/unfreeze {id}")
+                command_list.append("Unfreeze{}/unfreeze {id}")
             else:
-                command_list.append("Freeze Player{}/freeze {id}")
-            
+                command_list.append("Freeze{}/freeze {id}")
+
         # is GM, give GM commands
         if target in target.area.area_manager.owners:
             if client.blinded:
-                command_list.append("Unblind Player{}/unblind {id}")
+                command_list.append("Unblind{}/unblind {id}")
             else:
-                command_list.append("Blind Player{}/blind {id}")
+                command_list.append("Blind{}/blind {id}")
             if client.deafened:
-                command_list.append("Undeafen Player{}/undeafen {id}")
+                command_list.append("Undeafen{}/undeafen {id}")
             else:
-                command_list.append("Deafen Player{}/deafen {id}")
+                command_list.append("Deafen{}/deafen {id}")
             if client.player_muted:
-                command_list.append("Unmute Player{}/player_unmute {id}")
+                command_list.append("Unmute{}/player_unmute {id}")
             else:
-                command_list.append("Mute Player{}/player_mute {id}")
+                command_list.append("Mute{}/player_mute {id}")
             if client.forced_blankpost:
-                command_list.append("Unforce Blankpost from Player{}/unforce_blankpost {id}")
+                command_list.append("Unforce Blankpost{}/unforce_blankpost {id}")
             else:
-                command_list.append("Force Blankpost for Player{}/force_blankpost {id}")
+                command_list.append("Force Blankpost{}/force_blankpost {id}")
             if client.hidden:
-                command_list.append("Unhide Player{}/player_unhide {id}")
+                command_list.append("Unhide{}/player_unhide {id}")
             else:
-                command_list.append("Hide Player{}/player_hide {id}")
+                command_list.append("Hide{}/player_hide {id}")
             if client.sneaking:
-                command_list.append("Unsneak Player{}/unsneak {id}")
+                command_list.append("Unsneak{}/unsneak {id}")
             else:
-                command_list.append("Sneak Player{}/sneak {id}")
+                command_list.append("Sneak{}/sneak {id}")
 
-        print(f"Sending player state to [{target.id}] {target.showname} for [{client.id}] {client.showname}...")
         target.send_command("PU", client.id, self.COMMANDS, '&'.join(command_list))
 
     def get_area_id(self, target, client):
@@ -155,85 +256,26 @@ class PlayerStateObserver:
             area_id = area_id + 1
         return area_id
 
-    def send_to_client_list(self, client, command, *args):
-        """Send a packet about the client to every player list of its hub."""
-        for target in self.client_list:
-            if target.area.area_manager != client.area.area_manager:
-                continue
-            target.send_command(command, *args)
-
-    def notify_name_changed(self, client):
-        if client not in self.listed:
+    def notify_changed(self, client, old_hub=None):
+        """Re-send the client's state everywhere it is relevant."""
+        if not client.joined:
             return
-        self.send_to_client_list(
-            client, "PU", client.id, self.NAME, client.name)
+        hub = client.area.area_manager
 
-    def notify_character_changed(self, client):
-        """
-        Announce a character change. Picking a character also takes the client
-        out of spectator, so the listing itself may have to be added or dropped.
-        """
-        if client not in self.listed or client.hidden:
-            self.notify_visibility_changed(client)
-            return
-        self.send_to_client_list(
-            client, "PU", client.id, self.CHARACTER, client.char_name)
-        self.send_to_client_list(
-            client, "PU", client.id, self.CHARACTER_NAME, client.showname)
+        if old_hub is not None and old_hub is not hub:
+            # Drop the client from old-hub viewers.
+            for viewer in self._recipients(old_hub):
+                if client.id in viewer.player_list_ids:
+                    viewer.send_command("PR", client.id, self.REMOVE)
+                    viewer.player_list_ids.discard(client.id)
+            # Clear the moving client's old-hub view.
+            self._clear_player_list(client)
 
-    def notify_character_name_changed(self, client):
-        if client not in self.listed:
-            return
-        self.send_to_client_list(
-            client, "PU", client.id, self.CHARACTER_NAME, client.showname)
+        # Update this client's row for every other viewer.
+        for viewer in self._recipients(hub):
+            if viewer is not client:
+                self._sync_player(viewer, client)
 
-    def notify_area_id_changed(self, client):
-        if client not in self.listed:
-            return
-        for target in self.client_list:
-            if target.area.area_manager != client.area.area_manager:
-                continue
-            target.send_command("PU", client.id, self.AREA_ID,
-                                self.get_area_id(target, client))
-
-    def notify_visibility_changed(self, client):
-        """Add or drop the listing of a client that hid or revealed itself."""
-        if client not in self.client_list:
-            return
-        if client.hidden:
-            if client in self.listed:
-                self.listed.discard(client)
-                self.send_to_client_list(
-                    client, "PR", client.id, self.REMOVE)
-            return
-        if client in self.listed:
-            return
-        self.listed.add(client)
-        for target in self.client_list:
-            if target.area.area_manager != client.area.area_manager:
-                continue
-            self.send_player_state(target, client)
-
-    def notify_hub_changed(self, client, old_hub):
-        """Move the client's listing over to the hub it just joined."""
-        if client not in self.client_list:
-            return
-        client.send_command("PR", client.id, self.REMOVE)
-        for other in self.client_list:
-            if other is not client and other.area.area_manager == old_hub:
-                client.send_command("PR", other.id, self.REMOVE)
-        if client in self.listed:
-            self.listed.discard(client)
-            for target in self.client_list:
-                if target is not client and target.area.area_manager == old_hub:
-                    target.send_command("PR", client.id, self.REMOVE)
-        self.send_player_list(client)
-
-
-    def notify_changed(self, client):
-        """Notify a general change"""
-        print(f"NOTIFY CHANGED CALLED ON [{client.id}] {client.showname}")
-        for other in self.client_list:
-            self.update_player_state(other, client)
-            self.update_player_state(client, other)
-        # self.notify_visibility_changed(client)
+        # Refresh the client's own row and reconcile its whole view.
+        self._sync_player(client, client)
+        self._sync_viewer(client)

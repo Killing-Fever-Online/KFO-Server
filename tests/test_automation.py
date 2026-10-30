@@ -1031,8 +1031,7 @@ def _server_with_client_manager():
         },
         command_aliases={},
         player_state_observer=SimpleNamespace(
-            notify_hub_changed=lambda *a, **k: None,
-            notify_area_id_changed=lambda *a, **k: None,
+            notify_changed=lambda *a, **k: None,
         ),
     )
     server.client_manager = ClientManager(server)

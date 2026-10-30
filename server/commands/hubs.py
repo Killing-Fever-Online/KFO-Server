@@ -422,6 +422,7 @@ def ooc_cmd_area_rename(client, arg):
     area.name = dezalgo(name)[:64]
     # Update the area list so the name change is reflected in it
     area.area_manager.broadcast_area_list(refresh=True)
+    client.server.player_state_observer.refresh_hub(client.area.area_manager)
     client.send_ooc(f"Renamed area [{area.id}] to {area.name}.")
 
 
@@ -673,6 +674,7 @@ def ooc_cmd_toggle_getareas(client, tog):
     client.area.area_manager.broadcast_ooc(
         f"Use of /getareas has been {toggle} for this hub."
     )
+    client.server.player_state_observer.refresh_hub(client.area.area_manager)
 
 
 @mod_only(hub_owners=True)
