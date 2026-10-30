@@ -829,6 +829,9 @@ class ClientManager:
                 self.first_joined = False
                 self.area.broadcast_ooc(
                     f"[{self.id}] {self.showname} has joined!")
+                # Show the area's welcome popup (BB packet) if one is set.
+                if self.area.popup:
+                    self.send_bb(self.area.popup)
 
             if self.area.area_manager.autokick_to_latest_area:
                 self.kick_to_latest_area()
