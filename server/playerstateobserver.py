@@ -25,6 +25,7 @@ class PlayerStateObserver:
     DESC = 4
     FORMAT = 5
     COMMANDS = 6
+    CATEGORY_NAME = 7
 
     def __init__(self, server):
         self.server = server
@@ -142,6 +143,9 @@ class PlayerStateObserver:
                             self.CHARACTER_NAME, target.showname)
         viewer.send_command("PU", target.id, self.AREA_ID,
                             self.get_area_id(viewer, target))
+        # Send explicit category name so swapping between hub/area list doesn't screw things up
+        viewer.send_command("PU", target.id, self.CATEGORY_NAME,
+                            f"[{target.area.id}] {target.area.name}")
         desc = target.desc
         if target.iniswap != "":
             desc = f"[Char Folder: {target.char_name}]\n{desc}"
@@ -184,6 +188,8 @@ class PlayerStateObserver:
                 command_list.append("Unfollow{}/unfollow")
             else:
                 command_list.append("Follow{}/follow {id}")
+            # If we see them, we can probably move towards them.
+            command_list.append(f"Move Towards{{}}/area {target.area.id}")
         else:
             command_list.append("Unfollow Others{}/unfollow")
             if target.sneaking:
