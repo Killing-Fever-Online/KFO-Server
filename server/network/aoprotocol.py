@@ -190,7 +190,7 @@ class AOProtocol(asyncio.Protocol):
         :returns: returns True if message was validated
 
         """
-        if needs_auth and (self.client.char_id is None or self.client.char_id == -1) and not self.client.is_mod and self.client not in self.client.area.owners:
+        if needs_auth and (self.client.char_id is None) and not self.client.is_mod and self.client not in self.client.area.owners:
             return False
         if len(args) != len(types):
             return False
@@ -711,7 +711,7 @@ class AOProtocol(asyncio.Protocol):
             args,
             self.ArgType.STR, # 0 # msg_type
             self.ArgType.STR_OR_EMPTY, # 1  # pre
-            self.ArgType.STR, # 2 # folder
+            self.ArgType.STR_OR_EMPTY, # 2 # folder
             self.ArgType.STR_OR_EMPTY, # 3 # anim
             self.ArgType.STR_OR_EMPTY, # 4  # text
             self.ArgType.STR, # 5 # pos
@@ -734,7 +734,7 @@ class AOProtocol(asyncio.Protocol):
             self.ArgType.STR, # 22 # frames_realization
             self.ArgType.STR, # 23 # frames_sfx
             self.ArgType.INT, # 24 # additive
-            self.ArgType.STR, # 25 # effect
+            self.ArgType.STR_OR_EMPTY, # 25 # effect
             self.ArgType.INT, # 26 # third_charid
             self.ArgType.STR_OR_EMPTY, # 27 # video
         ):
@@ -782,6 +782,12 @@ class AOProtocol(asyncio.Protocol):
             self.client.send_ooc(
                 f"Something went wrong! Please report this to the developers:\n{args}")
             return
+
+        if cid == -1 and not self.client.is_mod and not self.client in self.client.area.owners:
+            self.client.send_ooc(
+                "You are not authorized to speak as a Spectator!")
+            return
+
         # Targets for whispering
         whisper_clients = None
 
