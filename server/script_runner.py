@@ -36,6 +36,7 @@ import random
 import re
 
 from server import commands
+from server.constants import BroadcastType
 from server.scripting import (
     _LIVE_PATH,
     _QUOTED,
@@ -574,8 +575,12 @@ class ScriptRunner:
     def send_packet(self, header, args):
         """Broadcast an AO packet, honouring the executor's broadcast list."""
         area_list = [self.area]
+        player_list = None
         if len(self.executor.broadcast_list) > 0:
-            area_list = self.executor.broadcast_list
+            if self.executor.broadcast_type == BroadcastType.PLAYER:
+                player_list = self.executor.broadcast_list
+            else:
+                area_list = self.executor.broadcast_list
         variables = getattr(self.area, "variables", {})
         try:
             packet_args = [
@@ -585,22 +590,41 @@ class ScriptRunner:
             self.area.broadcast_ooc(f"[Demo] [ERROR] {ex}")
             self.finish()
             return
-        for area in area_list:
-            if header == "MS":
-                # If we're on narration pos, keep the same position as the
-                # last IC message, falling back to the area's first pos-lock.
-                if len(packet_args) > 5 and packet_args[5] == "":
-                    if area.last_ic_message is not None:
-                        packet_args[5] = area.last_ic_message[5]
-                    elif len(self.area.pos_lock) > 0:
-                        packet_args[5] = self.area.pos_lock[0]
-            area.send_command(header, *packet_args)
-            logger.info(
-                "Demo broadcast %s to area %s (%d clients)",
-                header,
-                area.id,
-                len(area.clients),
-            )
+        if player_list is not None:
+            for client in player_list:
+                client_args = list(packet_args)
+                target_area = client.area
+                if header == "MS" and len(client_args) > 5 and client_args[5] == "":
+                    # If we're on narration pos, keep the same position as the
+                    # target area's last IC message, falling back to its first pos-lock.
+                    if target_area is not None and target_area.last_ic_message is not None:
+                        client_args[5] = target_area.last_ic_message[5]
+                    elif target_area is not None and len(target_area.pos_lock) > 0:
+                        client_args[5] = target_area.pos_lock[0]
+                client.send_command(header, *client_args)
+                logger.info(
+                    "Demo broadcast %s to player %s in area %s",
+                    header,
+                    client.id,
+                    target_area.id if target_area is not None else -1,
+                )
+        else:
+            for area in area_list:
+                if header == "MS":
+                    # If we're on narration pos, keep the same position as the
+                    # last IC message, falling back to the area's first pos-lock.
+                    if len(packet_args) > 5 and packet_args[5] == "":
+                        if area.last_ic_message is not None:
+                            packet_args[5] = area.last_ic_message[5]
+                        elif len(self.area.pos_lock) > 0:
+                            packet_args[5] = self.area.pos_lock[0]
+                area.send_command(header, *packet_args)
+                logger.info(
+                    "Demo broadcast %s to area %s (%d clients)",
+                    header,
+                    area.id,
+                    len(area.clients),
+                )
         self.modified_packets.add(header)
 
     def run_command(self, cmd, arg):

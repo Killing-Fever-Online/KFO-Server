@@ -7,7 +7,7 @@ import pytimeparse
 import shlex
 
 from server import database
-from server.constants import TargetType
+from server.constants import TargetType, BroadcastType
 from server.exceptions import ClientError, ServerError, ArgumentError
 from server.remote_client import RemoteClient
 from server.scripting import evaluate_expression, resolve_value, ScriptingError, DivisionByZeroError
@@ -1056,28 +1056,40 @@ def ooc_cmd_sfx(client, arg):
         if not client.can_sfx():
             raise ClientError("You need to wait before playing sfx again!")
     target_areas = [client.area]
+    target_players = None
     if len(client.broadcast_list) > 0 and is_mod:
         try:
             a_list = ", ".join([str(a.id) for a in client.broadcast_list])
-            client.send_ooc(f"Broadcasting to areas {a_list}")
-            target_areas = client.broadcast_list
+            if client.broadcast_type == BroadcastType.PLAYER:
+                target_players = client.broadcast_list
+                client.send_ooc(f"Broadcasting to players {a_list}")
+            else:
+                target_areas = client.broadcast_list
+                client.send_ooc(f"Broadcasting to areas {a_list}")
         except:
             client.send_ooc(
                 "Your broadcast list is invalid! Do /clear_broadcast to reset it and /broadcast <id(s)> to set a new one."
             )
             return
-    for area in target_areas:
-        # Plays on unused music layer 3 (max channel)
-        area.send_command("MC", f"../general/{arg}", -1, "", 0, 3, 0)
-        area.broadcast_ooc(f"[{client.id}] {client.showname} has played sfx '{arg}'.")
-        for a in area.broadcast_list:
+    if target_players is not None:
+        for c in target_players:
             # Plays on unused music layer 3 (max channel)
-            a.send_command("MC", f"../general/{arg}", -1, "", 0, 3, 0)
-            a.broadcast_ooc(f"[{client.id}] {client.showname} has played sfx '{arg}'.")
+            c.send_command("MC", f"../general/{arg}", -1, "", 0, 3, 0)
+            c.send_ooc(f"[{client.id}] {client.showname} has played sfx '{arg}'.")
+    else:
+        for area in target_areas:
+            # Plays on unused music layer 3 (max channel)
+            area.send_command("MC", f"../general/{arg}", -1, "", 0, 3, 0)
+            area.broadcast_ooc(f"[{client.id}] {client.showname} has played sfx '{arg}'.")
+            for a in area.broadcast_list:
+                # Plays on unused music layer 3 (max channel)
+                a.send_command("MC", f"../general/{arg}", -1, "", 0, 3, 0)
+                a.broadcast_ooc(f"[{client.id}] {client.showname} has played sfx '{arg}'.")
     client.set_sfx_delay()
     database.log_area("sfx", client, client.area, message=f"has played sfx {arg}")
 
 
+@mod_only(area_owners=True)
 @command(Arg("var", rest=True, default="", help="variable currently stored in the area."))
 def ooc_cmd_get_variable(client, var):
     """
@@ -1097,6 +1109,7 @@ def ooc_cmd_get_variable(client, var):
         raise ClientError(f"Variable {var} is not set!")
 
 
+@mod_only(area_owners=True)
 @command(
     Arg("var", default="", help="variable name"),
     Arg("value", rest=True, default="", help="value to set it to")
@@ -1113,6 +1126,7 @@ def ooc_cmd_set_variable(client, var, value):
     client.send_ooc(f"Successfully set Variable: {var} to Value: {value}")
 
 
+@mod_only(area_owners=True)
 @command(
     Arg("var", default="", help="variable name"),
     Arg("expr", rest=True, default="", help="value to set it to, or an expression (10+10, x+5, etc.)")
