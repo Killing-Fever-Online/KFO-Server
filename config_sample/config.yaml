@@ -149,8 +149,8 @@ global_connection_rate:
 # Mods and CMs are exempt. Helps slow connect-spam-disconnect attacks.
 # Set to 0 to disable. (Default: 0 = disabled)
 min_connection_age:
-  before_ic: 3
-  before_cc: 3
+  before_ic: 0
+  before_cc: 0
 
 # Minimum milliseconds between /demo calls before rate limiting kicks in.
 # Set to 0 or less to disable demo rate limiting entirely. (Default: 0)

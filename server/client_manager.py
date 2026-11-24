@@ -10,7 +10,7 @@ from heapq import heappop, heappush
 
 
 from server import database
-from server.constants import TargetType, encode_ao_packet, contains_URL, derelative
+from server.constants import TargetType, BroadcastType, encode_ao_packet, contains_URL, derelative
 from server.exceptions import ClientError, AreaError, ServerError
 from server.constants import _SYSTEM_IPID
 
@@ -193,6 +193,8 @@ class ClientManager:
             self.replace_music = False
             # list of areas to broadcast the message, music and judge buttons to
             self.broadcast_list = []
+            # type of broadcast for the broadcast list
+            self.broadcast_type = BroadcastType.AREA
             # Whether we're viewing hub list or not in the A/M area list
             self.viewing_hub_list = False
             # Whether or not the client used the /showname command
@@ -943,9 +945,33 @@ class ClientManager:
                         )
                         return
 
+                if (
+                    self.broadcast_type == BroadcastType.PLAYER
+                    and len(self.broadcast_list) > 0
+                    and (self.is_mod or self in self.area.owners)
+                    and not self.edit_ambience
+                    and self.editing_minigame_song == ""
+                ):
+                    a_list = ", ".join([str(c.id) for c in self.broadcast_list])
+                    self.send_ooc(f"Broadcasting to players {a_list}")
+                    for c in self.broadcast_list:
+                        c.send_command(
+                            "MC",
+                            name,
+                            self.char_id,
+                            showname,
+                            1 if loop else 0,
+                            0,
+                            effects,
+                        )
+                    database.log_area("music", self, self.area, message=name)
+                    return
+
                 target_areas = [self.area]
-                if len(self.broadcast_list) > 0 and (
-                    self.is_mod or self in self.area.owners
+                if (
+                    len(self.broadcast_list) > 0
+                    and (self.is_mod or self in self.area.owners)
+                    and self.broadcast_type == BroadcastType.AREA
                 ):
                     try:
                         a_list = ", ".join([str(a.id)
@@ -2876,6 +2902,18 @@ class ClientManager:
                 # as that ID will no longer refer to this specific player.
                 if client.id in a.invite_list:
                     a.invite_list.discard(client.id)
+
+        if len(client.broadcast_list) > 0:
+            client.broadcast_list.clear()
+
+        for c in self.clients:
+            if c is client or c.broadcast_type != BroadcastType.PLAYER:
+                continue
+            if client in c.broadcast_list:
+                c.broadcast_list.remove(client)
+                c.send_ooc(
+                    f"[{client.id}] {client.showname} has been removed from your player broadcast list."
+                )
 
         if client.is_remote_client:
             client.leave_area()

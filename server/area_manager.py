@@ -3,7 +3,7 @@ from server.area import Area
 from server.timer import Timer
 from server.remote_client import RemoteClient
 from collections import OrderedDict
-from server.constants import derelative
+from server.constants import derelative, BroadcastType
 
 import oyaml as yaml  # ordered yaml
 import os
@@ -623,6 +623,19 @@ class AreaManager:
         for a in area_list:
             a.send_command(cmd, *args)
             a.send_owner_command(cmd, *args)
+
+    def send_broadcast_command(self, client, cmd, *args):
+        """
+        Broadcast an AO-compatible command to a client's broadcast targets.
+        :param client: client whose broadcast list to use
+        :param cmd: command name
+        :param *args: command arguments
+        """
+        if client.broadcast_type == BroadcastType.PLAYER:
+            for c in client.broadcast_list:
+                c.send_command(cmd, *args)
+        else:
+            self.send_remote_command(client.broadcast_list, cmd, *args)
 
     def send_timer_set_time(self, timer_id=None, new_time=None, start=False):
         """Broadcast a timer to all areas in this hub."""

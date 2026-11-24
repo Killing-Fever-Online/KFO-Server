@@ -6,7 +6,7 @@ import oyaml as yaml  # ordered yaml
 from server import database
 from server.constants import TargetType, derelative
 from server.exceptions import ClientError, ArgumentError, AreaError
-from server.constants import dezalgo
+from server.constants import BroadcastType, dezalgo
 from server.schema.area_fields import AREA_PREF_CM_ALLOWED
 
 from . import mod_only, command, Arg
@@ -49,6 +49,7 @@ __all__ = [
     "ooc_cmd_gmpanel",
     "ooc_cmd_ungm",
     "ooc_cmd_broadcast",
+    "ooc_cmd_broadcast_players",
     "ooc_cmd_clear_broadcast",
     "ooc_cmd_hpset",
     "ooc_cmd_toggle_autokick",
@@ -1033,14 +1034,71 @@ def ooc_cmd_broadcast(client, areas):
     """
     if not areas:
         a_list = ", ".join([str(a.id) for a in client.broadcast_list])
-        client.send_ooc(f"Your broadcast list is {a_list}")
+        typestr = 'area'
+        if client.broadcast_type == BroadcastType.PLAYER:
+            typestr = 'player'
+        client.send_ooc(f"Your {typestr} broadcast list is {a_list}")
         return
     try:
         broadcast_list = client.area.area_manager.get_areas_by_args(areas)
+    except ValueError:
+        client.send_ooc("Bad arguments!")
+        return
+    except (ClientError, AreaError):
+        raise
+    client.broadcast_list = broadcast_list
+    client.broadcast_type = BroadcastType.AREA
+    a_list = ", ".join([str(a.id) for a in client.broadcast_list])
+    client.send_ooc(f"Your area broadcast list is now {a_list}")
+
+
+@mod_only(hub_owners=True)
+@command(Arg("args", variadic=True, default=None, help="client IDs (blank shows current)"))
+def ooc_cmd_broadcast_players(client, args):
+    """
+    Start broadcasting your IC, Music and Judge buttons to specified client ID's.
+    To include all clients, use /broadcast_players all.
+    /clear_broadcast to stop broadcasting.
+    Usage: /broadcast_players <id(s)>
+    """
+    if not args:
+        a_list = ", ".join([str(a.id) for a in client.broadcast_list])
+        typestr = 'area'
+        if client.broadcast_type == BroadcastType.PLAYER:
+            typestr = 'player'
+        client.send_ooc(f"Your {typestr} broadcast list is {a_list}")
+        return
+    try:
+        broadcast_list = []
+        arg_list = []
+
+        for arg in args:
+            arg = arg.lower().strip()
+            if arg == 'all':
+                # MAKE SURE TO RETURN A COPY AND NOT A DIRECT REFERENCE OR YOU'RE GONNA BE IN A WORLD OF HURT
+                broadcast_list = [
+                    c for c in client.area.area_manager.clients
+                    if c != client and not c.is_remote_client
+                ]
+                break
+            arg_list.append(arg)
+
+        if len(arg_list) > 0:
+            seen = set()
+            for c in client.area.area_manager.clients:
+                if c == client or c.is_remote_client or c in seen:
+                    continue
+                if c.id in arg_list or \
+                str(c.id) in arg_list or \
+                c.char_name.lower() in arg_list:
+                    broadcast_list.append(c)
+                    seen.add(c)
+
         # We don't modify the client.broadcast_list directly until now just in case there's an exception.
         client.broadcast_list = broadcast_list
+        client.broadcast_type = BroadcastType.PLAYER
         a_list = ", ".join([str(a.id) for a in client.broadcast_list])
-        client.send_ooc(f"Your broadcast list is now {a_list}")
+        client.send_ooc(f"Your player broadcast list is now {a_list}")
     except ValueError:
         client.send_ooc("Bad arguments!")
     except (ClientError, AreaError):
@@ -1057,6 +1115,7 @@ def ooc_cmd_clear_broadcast(client):
         client.send_ooc("Your broadcast list is already empty!")
         return
     client.broadcast_list.clear()
+    client.broadcast_type = BroadcastType.AREA
     client.send_ooc("Your broadcast list has been cleared.")
 
 

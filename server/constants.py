@@ -34,6 +34,11 @@ class ReportCardReason(IntFlag):
     NoPlayerList = 4
 
 
+class BroadcastType(Enum):
+    AREA = 0
+    PLAYER = 1
+
+
 def dezalgo(input, tolerance=3):
     """
     Turns any string into a de-zalgo'd version, with a tolerance to allow for normal diacritic use.
