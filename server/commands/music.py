@@ -451,12 +451,12 @@ def ooc_cmd_musiclist_save(client, arg):
         musiclist = client.area.area_manager.music_list
         name = client.area.area_manager.music_ref
 
+    if len(args) >= 2:
+        name = derelative(args[1]).replace("/", "")
+
     if name == "unsaved":
-        if len(args) >= 2:
-            name = derelative(args[1]).replace("/", "")
-        else:
-            client.send_ooc("This is a new musiclist, you should give it a name")
-            return
+        client.send_ooc("This is a new musiclist, you should give it a name")
+        return
 
     if len(args) > 2 and args[1].lower() == "read_only":
         filepath = f"storage/musiclists/read_only/{name}.yaml"
