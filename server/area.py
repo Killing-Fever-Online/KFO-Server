@@ -1346,7 +1346,7 @@ class Area:
             # show up normally so they can see what they said.
             anim_to_send = "" if c == client and client.firstperson else anim
             if c.blinded and c != client:
-                anim_to_send = "misc/blank"
+                anim_to_send = ""
             c.send_command(
                 "MS",
                 msg_type,
