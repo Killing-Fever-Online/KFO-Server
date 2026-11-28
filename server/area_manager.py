@@ -309,6 +309,12 @@ class AreaManager:
             raise AreaError(
                 f"Hub {self.name} trying to load character data: File path {path} is invalid!")
 
+        if not isinstance(data, dict):
+            raise AreaError(
+                f"Hub {self.name} trying to load character data: "
+                f"{path} must contain a mapping of character IDs to attributes, "
+                f"got {type(data).__name__} instead.")
+
         try:
             for char in data.copy():
                 # Convert the old numeric way to store character data into character folder based one
